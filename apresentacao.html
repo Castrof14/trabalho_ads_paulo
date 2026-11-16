@@ -305,7 +305,7 @@ html.static *{transition:none!important;transition-delay:0s!important}
   <div class="hr a" style="margin:70px 0 50px;width:560px"></div>
   <div class="team a">
     <span class="pill">Gabriel</span><span class="pill">Guilherme</span><span class="pill">Abner</span><span class="pill">Aurisnei</span>
-    <span class="pill acc">85 créditos · sobra 0</span>
+    <span class="pill acc">83 créditos · sobra 0</span>
   </div>
   <div class="mono mute a" style="font-size:20px;margin-top:40px">07 · 11 · 2026</div>
 </section>
@@ -319,7 +319,7 @@ html.static *{transition:none!important;transition-delay:0s!important}
     <div class="card a" style="--c:var(--breeze)"><div class="n">01</div><h3>Gabriel</h3><div class="mono mute" style="font-size:17px">Levantamento & classificação</div>
       <ul><li>Conversa com o cliente</li><li>Critério prioritário</li><li>CAN · topologias</li></ul></div>
     <div class="card a" style="--c:var(--sunset)"><div class="n">02</div><h3>Guilherme</h3><div class="mono mute" style="font-size:17px">Equipamentos & orçamento</div>
-      <ul><li>85 créditos</li><li>Equipamentos e portas</li><li>Fibra × cobre</li></ul></div>
+      <ul><li>83 créditos</li><li>Equipamentos e portas</li><li>Fibra × cobre</li></ul></div>
     <div class="card a" style="--c:var(--twilight)"><div class="n">03</div><h3>Abner</h3><div class="mono mute" style="font-size:17px">Meios, desenho & riscos</div>
       <ul><li>Trechos e meios</li><li>Desenho da rede</li><li>Teste de falha</li></ul></div>
     <div class="card a" style="--c:var(--sunset-soft)"><div class="n">04</div><h3>Aurisnei</h3><div class="mono mute" style="font-size:17px">Mensagem & decisões</div>
@@ -425,7 +425,7 @@ html.static *{transition:none!important;transition-delay:0s!important}
 <section class="slide" data-p="2">
   <div class="eyebrow a"><span class="dot"></span>Parte 3 · Orçamento</div>
   <div style="display:flex;justify-content:space-between;align-items:flex-end">
-    <h2 class="a">85 créditos.<br><span class="mute">Nenhum sobrando.</span></h2>
+    <h2 class="a">83 créditos.<br><span class="mute">Nenhum sobrando.</span></h2>
     <div class="a" style="text-align:right"><div class="hero-stat">85<span class="mute" style="font-size:80px;letter-spacing:-2px">/85</span></div></div>
   </div>
   <div class="grow"></div>
@@ -529,28 +529,33 @@ html.static *{transition:none!important;transition-delay:0s!important}
 <section class="slide fail" data-p="3">
   <div class="eyebrow a"><span class="dot"></span>Parte 6 · Teste de falha</div>
   <h2 class="a">E se algo quebrar?</h2>
+  <p class="lead a" style="margin-top:18px;max-width:1300px">Simulação de falhas por componente: o que para, quem é afetado e qual proteção entra em ação.</p>
   <div class="grow"></div>
   <div class="grid g5" style="gap:22px">
-    <div class="card a"><span class="lvl low"><i></i>Impacto mínimo</span><h3>Um PC ou cabo</h3><p>Só aquele computador para.</p></div>
-    <div class="card a"><span class="lvl ok"><i></i>Coberto</span><h3>Link da operadora</h3><p>Modem 4G assume.</p></div>
-    <div class="card a"><span class="lvl ok"><i></i>Coberto</span><h3>Falta de energia</h3><p>Nobreak mantém roteador e secretaria.</p></div>
-    <div class="card a"><span class="lvl mid"><i></i>Parcial</span><h3>Fibra A ↔ B</h3><p>B e C sem internet. A segue.</p></div>
-    <div class="card a"><span class="lvl high"><i></i>Crítico</span><h3>Switch central A</h3><p>Escola toda sem internet.</p></div>
+    <div class="card a"><span class="lvl low"><i></i>Impacto mínimo</span><h3>Um PC ou cabo</h3><p style="font-size:23px">Cada máquina liga direto no switch. A falha fica isolada e o resto da escola segue normal.</p></div>
+    <div class="card a"><span class="lvl ok"><i></i>Coberto</span><h3>Link da operadora</h3><p style="font-size:23px">O modem 4G assume na hora, mantendo diários de classe e matrículas funcionando.</p></div>
+    <div class="card a"><span class="lvl ok"><i></i>Coberto</span><h3>Falta de energia</h3><p style="font-size:23px">O nobreak no rack do Bloco A mantém roteador, switch central e secretaria ligados.</p></div>
+    <div class="card a"><span class="lvl mid"><i></i>Parcial</span><h3>Fibra A ↔ B</h3><p style="font-size:23px">B e C perdem internet, mas o Bloco A segue on-line e a rede local entre B e C continua.</p></div>
+    <div class="card a"><span class="lvl high"><i></i>Crítico</span><h3>Switch central A</h3><p style="font-size:23px">Concentra o roteador e a saída para B e C. Se falhar, toda a escola fica sem internet.</p></div>
   </div>
 </section>
 
 <section class="slide" data-p="3">
   <div class="eyebrow a"><span class="dot"></span>Parte 6 · Gestão de riscos</div>
   <div class="grow"></div>
-  <div class="grid" style="grid-template-columns:1.2fr 1fr;gap:90px;align-items:end">
+  <div class="grid" style="grid-template-columns:1.15fr 1fr;gap:80px;align-items:end">
     <div>
-      <div class="mono mute a" style="font-size:20px">Ponto único de falha</div>
-      <h2 class="a" style="font-size:110px;letter-spacing:-4px">Roteador + switch<br>do Bloco A.</h2>
+      <div class="mono mute a" style="font-size:20px">Risco residual · Ponto único de falha</div>
+      <h2 class="a" style="font-size:84px;letter-spacing:-3px">Roteador + switch<br>do Bloco A.</h2>
+      <p class="lead a" style="margin-top:26px">Toda a saída para a internet passa por eles. Sem orçamento para switch e fibra duplicados, o risco físico é reduzido mantendo o rack em <span class="acc">sala trancada e protegida</span>.</p>
     </div>
     <div>
-      <div class="hero-stat a">7<span class="mute" style="font-size:60px;letter-spacing:-1px"> créditos</span></div>
-      <p class="lead a" style="margin-top:20px">investidos em segurança operacional</p>
-      <div class="a" style="display:flex;gap:14px;margin-top:34px"><span class="pill">4G reserva · 4</span><span class="pill">Nobreak · 3</span></div>
+      <div class="hero-stat a" style="font-size:110px;letter-spacing:-4px;line-height:1">7<span class="mute" style="font-size:52px;letter-spacing:-1px"> créditos</span></div>
+      <p class="lead a" style="margin-top:16px">investidos para cobrir as falhas mais prováveis:</p>
+      <div class="grid a" style="gap:16px;margin-top:26px">
+        <div class="card" style="padding:26px 32px"><div class="k">Modem 4G reserva · 4 créditos</div><p style="font-size:24px;margin-top:10px">Garante internet contínua caso o link da operadora caia.</p></div>
+        <div class="card" style="padding:26px 32px"><div class="k">Nobreak · 3 créditos</div><p style="font-size:24px;margin-top:10px">Protege os equipamentos centrais contra quedas e oscilações de energia.</p></div>
+      </div>
     </div>
   </div>
 </section>
@@ -647,7 +652,7 @@ html.static *{transition:none!important;transition-delay:0s!important}
   <div class="eyebrow a"><span class="dot"></span>Resumo</div>
   <h1 class="a" style="margin-top:40px;font-size:150px">Confiável<em>,</em> no limite<br><em>do orçamento.</em></h1>
   <div class="a" style="display:flex;gap:16px;margin-top:70px;flex-wrap:wrap">
-    <span class="pill">CAN · cliente-servidor</span><span class="pill">Fibra + cobre</span><span class="pill">3 APs</span><span class="pill">4G + nobreak</span><span class="pill solid">85 / 85 créditos</span>
+    <span class="pill">CAN · cliente-servidor</span><span class="pill">Fibra + cobre</span><span class="pill">3 APs</span><span class="pill">4G + nobreak</span><span class="pill solid">83 / 83 créditos</span>
   </div>
   <div class="hr a" style="margin:70px 0 40px;width:560px"></div>
   <div class="a" style="font-size:56px;letter-spacing:-1.5px">Obrigado. <span class="mute">Perguntas?</span></div>
