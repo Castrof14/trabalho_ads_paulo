@@ -11,7 +11,7 @@
 
   (window.DEMO3D_EXT = window.DEMO3D_EXT || []).push(function (api) {
     var THREE = api.THREE, scene = api.scene, camera = api.camera, R = api.R, S = api.S, V = api.V;
-    var W = api.W, H = api.H, RM = api.reduceMotion;
+    var RM = api.reduceMotion;
     var TAU = Math.PI * 2;
 
     /* ---------------- estilos (balões e etiquetas) ---------------- */
@@ -733,7 +733,7 @@
       pv.set(p.pos.x, p.pos.y + y * p.sc + p.jumpY * p.sc, p.pos.z).project(camera);
       if (pv.z > 1 || Math.abs(pv.x) > 1.1 || Math.abs(pv.y) > 1.1) { el.style.visibility = 'hidden'; return; }
       el.style.visibility = '';
-      el.style.transform = 'translate3d(' + ((pv.x + 1) / 2 * W).toFixed(1) + 'px,' + ((1 - pv.y) / 2 * H).toFixed(1) + 'px,0)';
+      el.style.transform = 'translate3d(' + ((pv.x + 1) / 2 * api.W).toFixed(1) + 'px,' + ((1 - pv.y) / 2 * api.H).toFixed(1) + 'px,0)';
     }
     api.post.push(function () {
       if (hovered && canvas.style.cursor !== 'pointer') canvas.style.cursor = 'pointer';

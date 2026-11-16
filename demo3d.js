@@ -40,11 +40,12 @@
   var host, canvas, hud, renderer, scene, camera, composer, bloomPass, clock;
   var ready = false, active = false, ch = 0, chT = 0, time = 0, raf = 0;
   var camPos, camTg, wantPos, wantTg, camVel, tgVel;
-  var yawUser = 0, pitchUser = 0, yawVel = 0, pitchVel = 0, dragging = false;
+  var yawUser = 0, pitchUser = 0, yawVel = 0, pitchVel = 0, zoomUser = 1, dragging = false;
   var hoverX = 0, hoverY = 0, hoverTX = 0, hoverTY = 0;
   var curFov = 40, fovVel = 0, baseBloom = .55;
   var reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  var labels = [], updaters = [], EXT = null;
+  var labels = [], updaters = [], EXT = null, pTgX = 0, pFogK = 1, pYaw = 0, pZm = 1;
+  var PORTRAIT = { 0: [.85, 14, .85], 1: [.85, 14, .85], 5: [.85, -10, .85], 7: [1, 22, .85], 10: [.85, 14, .85] };
   var S = { power: 1, fiber: 1, op: 1, topo: 0, rain: 0, packet: 0, lab: 0, final: 0, bolt: 0 };
   var T = {};
   var M = {};             // materiais compartilhados
@@ -149,7 +150,8 @@
     R.hemi = add(new THREE.HemisphereLight(0xa0c3ec, 0x0a0a0a, .28));
     var sun = new THREE.DirectionalLight(0xdfe8ff, .75);
     sun.position.set(-40, 90, 60); sun.castShadow = true;
-    sun.shadow.mapSize.set(2048, 2048);
+    var shRes = document.documentElement.classList.contains('m') ? 1024 : 2048;
+    sun.shadow.mapSize.set(shRes, shRes);
     var sc = sun.shadow.camera; sc.left = -120; sc.right = 90; sc.top = 70; sc.bottom = -70; sc.near = 10; sc.far = 260;
     sun.shadow.bias = -.0006; sun.shadow.radius = 3;
     add(sun); R.sun = sun;
@@ -480,8 +482,9 @@
     M.rain = new THREE.LineBasicMaterial({ color: 0xa0c3ec, transparent: true, opacity: 0, depthWrite: false });
     R.rain = add(new THREE.LineSegments(rg, M.rain));
     function rainStep(dt) {
-      var a = rg.attributes.position.array;
+      var a = rg.attributes.position.array, mob = document.documentElement.classList.contains('m');
       for (var i = 0; i < n; i++) {
+        if (mob && (i & 1)) { a[i * 6 + 1] = -20; a[i * 6 + 4] = -20; continue; }
         var d = drop[i]; d[1] -= dt * 38; d[0] -= dt * 6;
         if (d[1] < 0) { d[1] = 45; d[0] = -62 + Math.random() * 60; }
         a[i * 6] = d[0]; a[i * 6 + 1] = d[1]; a[i * 6 + 2] = d[2]; a[i * 6 + 3] = d[0] + .25; a[i * 6 + 4] = d[1] + 1.5; a[i * 6 + 5] = d[2];
@@ -804,7 +807,7 @@
       }
       M.lamp.emissiveIntensity = .45 + (1 - S.power) * 2.8;
       if (R.sun) R.sun.intensity = .75 - S.rain * .28;
-      if (scene.fog) scene.fog.density = .0062 + S.rain * .0038;
+      if (scene.fog) scene.fog.density = (.0062 + S.rain * .0038) / pFogK;
     });
   }
 
@@ -980,19 +983,31 @@
     pitchUser = Math.max(-.5, Math.min(.5, pitchUser));
 
     var speed = camVel.length();
-    var targetFov = reduceMotion ? 40 : (40 + Math.min(4.2, speed * .038));
+    var aspect = W / Math.max(1, H);
+    var baseFov = aspect < 1 ? Math.min(62, 40 * Math.pow(1 / aspect, .34)) : 40;
+    var targetFov = reduceMotion ? baseFov : (baseFov + Math.min(4.2, speed * .038));
     var fovF = (targetFov - curFov) * 14;
     fovVel = (fovVel + fovF * dt) * Math.exp(-7 * dt);
     curFov += fovVel * dt;
     if (Math.abs(camera.fov - curFov) > .02) { camera.fov = curFov; camera.updateProjectionMatrix(); }
 
+    if (!dragging) zoomUser = lerp(zoomUser, 1, Math.min(1, dt * 1.4));
+    var portraitZoom = aspect < 1 ? Math.min(2.1, Math.max(1.15, .95 / aspect)) : 1;
+    var tgYOff = aspect < 1 ? -Math.min(7, (1 - aspect) * 11) : 0;
+    // retrato: enquadramento por capítulo [giro, deslocamento x, distância] calculado para 390×844 —
+    // vista diagonal para os 3 blocos caberem na largura; a névoa afina com a distância
+    var PF = PORTRAIT[ch], pk = aspect < 1 && PF ? Math.min(1, (1 - aspect) * 2) : 0, pf = Math.min(1, dt * 2.5);
+    pTgX += ((PF ? PF[1] : 0) * pk - pTgX) * pf;
+    pZm += ((1 - (PF ? 1 - PF[2] : 0) * pk) - pZm) * pf;
+    pYaw += ((PF ? PF[0] : 0) * pk - pYaw) * pf;
+    pFogK = portraitZoom * pZm;
     var idleYaw = reduceMotion ? 0 : Math.sin(time * .16) * .045;
-    var yaw = yawUser + hoverX * .055 + idleYaw + (CH[ch].final ? chT * .06 : 0);
+    var yaw = yawUser + hoverX * .055 + idleYaw + pYaw + (CH[ch].final ? chT * .06 : 0);
     var rel = camPos.clone().sub(camTg);
-    var rad = rel.length(), th = Math.atan2(rel.x, rel.z) + yaw, ph = Math.acos(Math.min(1, Math.max(-1, rel.y / rad)));
+    var rad = rel.length() * zoomUser * portraitZoom * pZm, th = Math.atan2(rel.x, rel.z) + yaw, ph = Math.acos(Math.min(1, Math.max(-1, rel.y / rel.length())));
     ph = Math.min(1.45, Math.max(.12, ph - pitchUser - hoverY * .032));
-    camera.position.set(camTg.x + rad * Math.sin(ph) * Math.sin(th), camTg.y + rad * Math.cos(ph), camTg.z + rad * Math.sin(ph) * Math.cos(th));
-    camera.lookAt(camTg);
+    camera.position.set(camTg.x + pTgX + rad * Math.sin(ph) * Math.sin(th), camTg.y + rad * Math.cos(ph), camTg.z + rad * Math.sin(ph) * Math.cos(th));
+    camera.lookAt(camTg.x + pTgX, camTg.y + tgYOff, camTg.z);
 
     /* ---- render ---- */
     if (composer) composer.render(); else renderer.render(scene, camera);
@@ -1097,8 +1112,9 @@
     dots.innerHTML = CH.map(function (c, i) { return '<button title="' + (c.t || c.ey) + '">' + String(i + 1).padStart(2, '0') + '</button>'; }).join('');
     [].forEach.call(dots.querySelectorAll('button'), function (b, i) { b.addEventListener('click', function (e) { e.stopPropagation(); setChapter(i); }); });
 
-    // arrastar para girar + micro-parallax + raycast de hover/clique
-    var lx = 0, ly = 0, downX = 0, downY = 0;
+    // arrastar para girar + pinch zoom + toque + micro-parallax
+    var lx = 0, ly = 0, downX = 0, downY = 0, lastTap = 0;
+    var ptrs = {}, pinchDist = 0;
     var ray = new THREE.Raycaster(), ptr = new THREE.Vector2(), hoveredObj = null;
     function pickInteractive(clientX, clientY) {
       var rect = canvas.getBoundingClientRect();
@@ -1108,16 +1124,37 @@
       var hits = ray.intersectObjects(interactables, false);
       return hits.length ? hits[0].object : null;
     }
+    function ptrKeys() { return Object.keys(ptrs); }
     canvas.addEventListener('pointerdown', function (e) {
-      dragging = true; yawVel = 0; pitchVel = 0;
-      lx = downX = e.clientX; ly = downY = e.clientY;
-      canvas.setPointerCapture(e.pointerId);
+      ptrs[e.pointerId] = { x: e.clientX, y: e.clientY };
+      var ks = ptrKeys();
+      if (ks.length === 2) {
+        var a = ptrs[ks[0]], b = ptrs[ks[1]];
+        pinchDist = Math.hypot(a.x - b.x, a.y - b.y);
+        dragging = true;
+      } else {
+        dragging = true; yawVel = 0; pitchVel = 0;
+        lx = downX = e.clientX; ly = downY = e.clientY;
+      }
+      try { canvas.setPointerCapture(e.pointerId); } catch (err) {}
     });
     canvas.addEventListener('pointermove', function (e) {
-      var rect = canvas.getBoundingClientRect();
-      hoverTX = ((e.clientX - rect.left) / Math.max(1, rect.width) - .5) * 2;
-      hoverTY = ((e.clientY - rect.top) / Math.max(1, rect.height) - .5) * 2;
+      if (ptrs[e.pointerId]) { ptrs[e.pointerId].x = e.clientX; ptrs[e.pointerId].y = e.clientY; }
+      var ks = ptrKeys();
+      if (ks.length === 2) {
+        var a = ptrs[ks[0]], b = ptrs[ks[1]];
+        var d = Math.hypot(a.x - b.x, a.y - b.y);
+        if (pinchDist > 0 && d > 0) zoomUser = Math.max(.55, Math.min(1.65, zoomUser * (pinchDist / d)));
+        pinchDist = d;
+        return;
+      }
+      if (e.pointerType !== 'touch') {
+        var rect = canvas.getBoundingClientRect();
+        hoverTX = ((e.clientX - rect.left) / Math.max(1, rect.width) - .5) * 2;
+        hoverTY = ((e.clientY - rect.top) / Math.max(1, rect.height) - .5) * 2;
+      }
       if (!dragging) {
+        if (e.pointerType === 'touch') return;
         hoveredObj = pickInteractive(e.clientX, e.clientY);
         if (hoveredObj && hoveredObj.userData.interactive) {
           var info = hoveredObj.userData.interactive;
@@ -1132,23 +1169,38 @@
         }
         return;
       }
-      var dy = -(e.clientX - lx) * .005, dp = (e.clientY - ly) * .003;
+      var sens = e.pointerType === 'touch' ? .007 : .005;
+      var dy = -(e.clientX - lx) * sens, dp = (e.clientY - ly) * (sens * .6);
       yawUser += dy; pitchUser += dp;
       yawVel = dy * .45; pitchVel = dp * .45;
       lx = e.clientX; ly = e.clientY;
       yawUser = Math.max(-1.6, Math.min(1.6, yawUser)); pitchUser = Math.max(-.5, Math.min(.5, pitchUser));
     });
     canvas.addEventListener('pointerleave', function () { hoverTX = 0; hoverTY = 0; R.hoverRing.visible = false; canvas.style.cursor = ''; });
-    canvas.addEventListener('pointerup', function (e) {
-      dragging = false;
-      if (Math.hypot(e.clientX - downX, e.clientY - downY) < 6) {
-        var hit = pickInteractive(e.clientX, e.clientY);
-        if (hit && hit.userData.interactive && hit.userData.interactive.onClick) {
-          hit.userData.interactive.onClick();
+    function endPtr(e) {
+      delete ptrs[e.pointerId];
+      var ks = ptrKeys();
+      if (ks.length < 2) pinchDist = 0;
+      if (ks.length === 0) {
+        dragging = false;
+        if (Math.hypot(e.clientX - downX, e.clientY - downY) < 8) {
+          var now = performance.now();
+          if (now - lastTap < 300) { yawUser = 0; pitchUser = 0; zoomUser = 1; lastTap = 0; }
+          else {
+            lastTap = now;
+            var hit = pickInteractive(e.clientX, e.clientY);
+            if (hit && hit.userData.interactive && hit.userData.interactive.onClick) {
+              hit.userData.interactive.onClick();
+            }
+          }
         }
       }
-    });
+    }
+    canvas.addEventListener('pointerup', endPtr);
+    canvas.addEventListener('pointercancel', endPtr);
     addEventListener('resize', fitDPR);
+    addEventListener('orientationchange', fitDPR);
+    addEventListener('stagechange', fitDPR);
 
     clock = new THREE.Clock();
     ready = true;
@@ -1157,6 +1209,13 @@
 
   function fitDPR() {
     if (!renderer) return;
+    if (host && host.clientWidth > 0 && host.clientHeight > 0 && (document.documentElement.classList.contains('m') || innerWidth <= 900 || host.clientWidth < 1880)) {
+      W = host.clientWidth; H = host.clientHeight;
+    } else {
+      W = 1920; H = 1080;
+    }
+    if (EXT) { EXT.W = W; EXT.H = H; }
+    if (camera) { camera.aspect = W / Math.max(1, H); camera.updateProjectionMatrix(); }
     var s = Math.min(innerWidth / W, innerHeight / H);
     var pr = Math.max(.6, Math.min(1.5, s * (devicePixelRatio || 1)));
     renderer.setPixelRatio(pr);
@@ -1171,6 +1230,7 @@
     enter: function (fromEnd, startAt) {
       if (!ready && !init()) return;
       active = true;
+      fitDPR();
       var first = startAt != null ? startAt : (fromEnd ? CH.length - 1 : 0);
       if (!camPos) { camPos = V(-40, 140, 190); camTg = V(-30, 0, -8); }
       setChapter(first, startAt != null);
