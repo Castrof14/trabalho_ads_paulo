@@ -1,0 +1,772 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Projeto de Rede — Escola Municipal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500&family=Geist+Mono:wght@400&display=swap" rel="stylesheet">
+<style>
+:root{
+  --canvas:#0a0a0a; --soft:#1a1c20; --card:#191919; --mid:#363a3f; --hair:#212327;
+  --ink:#ffffff; --body:#dadbdf; --mute:#7d8187;
+  --sunset:#ff7a17; --sunset-soft:#ffc285; --dusk:#7c3aed; --twilight:#c4b5fd; --breeze:#a0c3ec;
+  --accent:var(--breeze);
+  --sans: Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "Geist Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+  --ease: cubic-bezier(.22,.8,.24,1);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;background:var(--canvas);color:var(--ink);font-family:var(--sans);overflow:hidden}
+body{-webkit-font-smoothing:antialiased}
+
+/* ---------- fundo animado ---------- */
+#bg{position:fixed;inset:0;z-index:0}
+.glow{position:fixed;width:70vmax;height:70vmax;border-radius:50%;filter:blur(120px);opacity:.16;z-index:0;
+  transition:background 1.6s var(--ease);pointer-events:none}
+.glow.g1{background:var(--accent);opacity:.12;top:-35vmax;right:-25vmax;animation:drift1 26s ease-in-out infinite alternate}
+.glow.g2{background:var(--dusk);bottom:-40vmax;left:-30vmax;opacity:.12;animation:drift2 32s ease-in-out infinite alternate}
+@keyframes drift1{to{transform:translate(-12vmax,10vmax) scale(1.1)}}
+@keyframes drift2{to{transform:translate(14vmax,-8vmax) scale(1.15)}}
+.grain{position:fixed;inset:0;z-index:1;pointer-events:none;opacity:.05;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
+
+/* ---------- palco 1920x1080 ---------- */
+#stage{position:fixed;left:50%;top:50%;width:1920px;height:1080px;transform-origin:center;z-index:2}
+.slide{position:absolute;inset:0;padding:110px 140px 120px;display:flex;flex-direction:column;
+  opacity:0;visibility:hidden;transform:scale(.985);transition:opacity .7s var(--ease),transform .9s var(--ease),visibility 0s .7s}
+.slide.on{opacity:1;visibility:visible;transform:none;transition:opacity .7s var(--ease),transform .9s var(--ease),visibility 0s}
+.slide.center{justify-content:center}
+
+/* revelação progressiva (estilo Notion) */
+.a{opacity:0;transform:translateY(18px);filter:blur(8px);
+  transition:opacity .8s var(--ease),transform .9s var(--ease),filter .8s var(--ease);transition-delay:0s}
+.slide.on .a{opacity:1;transform:none;filter:none;transition-delay:calc(var(--i,0) * 110ms + 200ms)}
+
+/* ---------- tipografia ---------- */
+.eyebrow{font-family:var(--mono);font-size:22px;letter-spacing:2.6px;text-transform:uppercase;color:var(--mute);display:flex;align-items:center;gap:16px}
+.eyebrow .dot{width:8px;height:8px;border-radius:50%;background:var(--accent);box-shadow:0 0 14px var(--accent)}
+h1{font-weight:400;font-size:150px;line-height:1;letter-spacing:-5px}
+h2{font-weight:400;font-size:88px;line-height:1.02;letter-spacing:-2.6px;margin-top:28px}
+h3{font-weight:400;font-size:40px;line-height:1.15;letter-spacing:-.8px}
+.lead{font-size:34px;line-height:1.4;color:var(--body);font-weight:400;letter-spacing:-.3px}
+.mono{font-family:var(--mono);letter-spacing:1.6px;text-transform:uppercase}
+.mute{color:var(--mute)}
+.acc{color:var(--accent)}
+.grow{flex:1}
+
+/* ---------- componentes ---------- */
+.pill{display:inline-flex;align-items:center;gap:12px;border:1px solid rgba(255,255,255,.22);border-radius:999px;
+  padding:12px 26px;font-size:24px;color:var(--ink);white-space:nowrap}
+.pill.solid{background:#fff;color:#0a0a0a;border-color:#fff}
+.pill.acc{border-color:color-mix(in srgb,var(--accent) 55%,transparent);color:var(--accent)}
+.card{background:color-mix(in srgb,var(--card) 82%,transparent);border:1px solid var(--hair);border-radius:8px;padding:40px;
+  backdrop-filter:blur(6px)}
+.card .k{font-family:var(--mono);font-size:19px;letter-spacing:2px;text-transform:uppercase;color:var(--mute)}
+.card .v{font-size:44px;letter-spacing:-1px;margin-top:14px;line-height:1.1}
+.card p{font-size:27px;line-height:1.4;color:var(--body);margin-top:14px;font-weight:400}
+.grid{display:grid;gap:28px}
+.g2{grid-template-columns:repeat(2,1fr)} .g3{grid-template-columns:repeat(3,1fr)} .g4{grid-template-columns:repeat(4,1fr)} .g5{grid-template-columns:repeat(5,1fr)}
+.hr{height:1px;background:var(--hair);margin:44px 0}
+.num{font-family:var(--mono);font-size:20px;color:var(--accent);letter-spacing:2px}
+
+/* rodapé fixo */
+#hud{position:fixed;left:0;right:0;bottom:0;z-index:5;display:flex;justify-content:space-between;align-items:center;
+  padding:0 34px 26px;font-family:var(--mono);font-size:13px;letter-spacing:1.6px;text-transform:uppercase;color:var(--mute);pointer-events:none}
+#hud .who{display:flex;align-items:center;gap:10px;transition:opacity .5s}
+#hud .who i{width:6px;height:6px;border-radius:50%;background:var(--accent);box-shadow:0 0 10px var(--accent);transition:background 1s}
+#bar{position:fixed;left:0;top:0;height:2px;background:var(--accent);z-index:6;transition:width .7s var(--ease),background 1s;box-shadow:0 0 12px var(--accent)}
+#hint{position:fixed;right:34px;top:26px;z-index:6;font-family:var(--mono);font-size:12px;letter-spacing:1.4px;color:var(--mute);
+  text-transform:uppercase;opacity:.8;transition:opacity 1s}
+
+/* ---------- capa ---------- */
+.cover h1{font-size:150px;letter-spacing:-5px}
+.cover h1 em{font-style:normal;color:var(--mute)}
+.team{display:flex;gap:16px;flex-wrap:wrap}
+
+/* ---------- divisores de seção ---------- */
+.divider .big{font-family:var(--mono);font-size:300px;line-height:1;color:transparent;-webkit-text-stroke:1px rgba(255,255,255,.18);letter-spacing:-10px}
+.divider h2{font-size:120px;letter-spacing:-4px;margin-top:10px}
+.divider .topics{display:flex;gap:14px;margin-top:56px;flex-wrap:wrap}
+.presenter{display:flex;align-items:center;gap:22px;margin-top:40px}
+.avatar{width:84px;height:84px;border-radius:50%;border:1px solid color-mix(in srgb,var(--accent) 60%,transparent);display:grid;place-items:center;
+  font-size:36px;color:var(--accent);background:color-mix(in srgb,var(--accent) 8%,transparent)}
+
+/* ---------- roteiro ---------- */
+.roster .card{display:flex;flex-direction:column;gap:18px;min-height:420px}
+.roster .card .n{font-family:var(--mono);font-size:64px;color:var(--c);letter-spacing:-2px}
+.roster .card h3{font-size:46px}
+.roster .card ul{list-style:none;display:flex;flex-direction:column;gap:12px;margin-top:auto}
+.roster .card li{font-size:24px;color:var(--body);font-weight:400;padding-left:22px;position:relative}
+.roster .card li:before{content:"";position:absolute;left:0;top:14px;width:8px;height:1px;background:var(--c)}
+
+/* ---------- perguntas ---------- */
+.qa{display:grid;grid-template-columns:110px 1fr auto;gap:36px;align-items:center;padding:34px 0;border-bottom:1px solid var(--hair)}
+.qa:first-child{border-top:1px solid var(--hair)}
+.qa .q{font-size:40px;letter-spacing:-.8px;line-height:1.2}
+.qa .q small{display:block;font-size:24px;color:var(--mute);margin-top:10px;letter-spacing:0;font-weight:400}
+.yes{font-family:var(--mono);font-size:22px;letter-spacing:2px;color:#0a0a0a;background:var(--accent);border-radius:999px;padding:10px 24px}
+
+/* ---------- destaque ---------- */
+.hero-stat{font-size:200px;letter-spacing:-8px;line-height:.9}
+.quote{font-size:52px;line-height:1.3;letter-spacing:-1.2px;font-weight:400}
+.quote b{font-weight:400;color:var(--accent)}
+
+/* ---------- topologia ---------- */
+svg text{font-family:var(--mono)}
+.flow{stroke-dasharray:10 14;animation:flow 1.6s linear infinite}
+@keyframes flow{to{stroke-dashoffset:-48}}
+.pulse{animation:pulse 2.4s ease-in-out infinite}
+@keyframes pulse{50%{opacity:.35}}
+
+.topo-cards .card{padding:28px 34px}.topo-cards .card .v{font-size:38px;margin-top:8px}.topo-cards .card p{font-size:24px;margin-top:8px}
+
+/* ---------- orçamento ---------- */
+.budget{display:flex;height:120px;border-radius:8px;overflow:hidden;gap:4px}
+.budget .seg{height:100%;width:0;transition:width 1.2s var(--ease);position:relative;display:flex;align-items:flex-end;padding:14px 16px;
+  font-family:var(--mono);font-size:22px;color:#0a0a0a}
+.slide.on .budget .seg{width:var(--w)}
+.legend{display:grid;grid-template-columns:repeat(4,1fr);gap:26px 40px;margin-top:56px}
+.legend div{display:flex;flex-direction:column;gap:8px;border-left:2px solid var(--c);padding-left:20px}
+.legend b{font-weight:400;font-size:52px;letter-spacing:-1.5px}
+.legend span{font-size:23px;color:var(--body);font-weight:400}
+
+/* ---------- equipamentos ---------- */
+.eq .card{display:flex;flex-direction:column;gap:22px}
+.eq .item{display:flex;justify-content:space-between;align-items:baseline;gap:20px;padding:14px 0;border-bottom:1px solid var(--hair);font-size:28px;font-weight:400;color:var(--body)}
+.eq .item:last-child{border-bottom:0}
+.eq .item b{font-family:var(--mono);font-weight:400;font-size:20px;color:var(--accent);letter-spacing:1.5px;white-space:nowrap}
+.eq h3{display:flex;justify-content:space-between;align-items:center}
+
+/* ---------- portas ---------- */
+.ports{display:flex;flex-direction:column;gap:34px}
+.prow{display:grid;grid-template-columns:420px 1fr 180px;align-items:center;gap:36px}
+.prow .lbl{font-size:30px;letter-spacing:-.4px}
+.prow .lbl small{display:block;font-family:var(--mono);font-size:17px;color:var(--mute);letter-spacing:1.6px;margin-top:6px;text-transform:uppercase}
+.sq{display:flex;gap:7px;flex-wrap:nowrap}
+.sq i{width:32px;height:32px;border-radius:6px;border:1px solid var(--mid);opacity:0;transform:scale(.6);transition:all .5s var(--ease)}
+.sq i.u{background:var(--accent);border-color:var(--accent);box-shadow:0 0 12px color-mix(in srgb,var(--accent) 45%,transparent)}
+.slide.on .sq i{opacity:1;transform:none;transition-delay:calc(var(--d) * 28ms + 500ms)}
+.prow .cnt{font-family:var(--mono);font-size:30px;text-align:right}
+.prow .cnt span{color:var(--mute);font-size:18px;display:block;letter-spacing:1.6px}
+
+/* ---------- trechos ---------- */
+.link{display:grid;grid-template-columns:420px 1fr 260px 260px;gap:36px;align-items:center;padding:30px 0;border-bottom:1px solid var(--hair)}
+.link:first-of-type{border-top:1px solid var(--hair)}
+.link .from{font-size:34px;letter-spacing:-.6px}
+.link .from small{display:block;font-family:var(--mono);color:var(--mute);font-size:18px;letter-spacing:1.6px;margin-top:6px}
+.link .med{display:flex;align-items:center;gap:20px;font-size:28px;font-weight:400;color:var(--body)}
+.wire{flex:0 0 120px;height:2px;border-radius:2px;position:relative;overflow:hidden;background:var(--mid)}
+.wire:after{content:"";position:absolute;top:0;left:-40%;width:40%;height:100%;background:var(--wc);animation:run 1.8s linear infinite;box-shadow:0 0 10px var(--wc)}
+.wire.dash{background:repeating-linear-gradient(90deg,var(--mid) 0 8px,transparent 8px 14px)}
+@keyframes run{to{left:100%}}
+.tag{font-family:var(--mono);font-size:19px;letter-spacing:1.6px;text-transform:uppercase;color:var(--body)}
+.tag.warn{color:var(--sunset-soft)}
+
+/* ---------- limite 100 m ---------- */
+.dist{display:flex;flex-direction:column;gap:120px;margin-top:70px}
+.drow .track{position:relative;height:16px;border-radius:999px;background:var(--soft);margin-top:24px}
+.drow .fill{position:absolute;left:0;top:0;bottom:0;width:0;border-radius:999px;background:var(--wc);transition:width 1.6s var(--ease) .6s;box-shadow:0 0 22px color-mix(in srgb,var(--wc) 50%,transparent)}
+.slide.on .drow .fill{width:var(--w)}
+.limit{position:absolute;top:-30px;bottom:-30px;left:calc(100% * 100 / 130);width:1px;background:rgba(255,255,255,.55)}
+.limit span{position:absolute;bottom:-34px;left:50%;transform:translateX(-50%);font-family:var(--mono);font-size:18px;letter-spacing:1.6px;white-space:nowrap;color:var(--ink)}
+.drow .hd{display:flex;justify-content:space-between;align-items:baseline}
+.drow .hd h3 small{font-family:var(--mono);font-size:20px;color:var(--mute);letter-spacing:1.6px;margin-left:18px;text-transform:uppercase}
+
+/* ---------- imagem da topologia ---------- */
+.shot{background:#fff;border-radius:8px;padding:12px;border:1px solid var(--hair);cursor:zoom-in;transition:transform .5s var(--ease)}
+.shot{display:flex;justify-content:center}.shot img{display:block;max-width:100%;max-height:610px;width:auto;height:auto;border-radius:4px}
+#zoom{position:fixed;inset:0;z-index:20;background:rgba(10,10,10,.92);display:none;place-items:center;cursor:zoom-out;padding:3vmin}
+#zoom.on{display:grid}
+#zoom img{max-width:100%;max-height:100%;background:#fff;border-radius:8px;padding:12px}
+
+/* ---------- falhas ---------- */
+.fail .card{display:flex;flex-direction:column;gap:16px;min-height:330px}
+.lvl{display:inline-flex;align-items:center;gap:10px;font-family:var(--mono);font-size:17px;letter-spacing:1.6px;text-transform:uppercase}
+.lvl i{width:10px;height:10px;border-radius:50%}
+.lvl.low i{background:#6ee7b7;box-shadow:0 0 10px #6ee7b7} .lvl.low{color:#6ee7b7}
+.lvl.mid i{background:var(--sunset-soft);box-shadow:0 0 10px var(--sunset-soft)} .lvl.mid{color:var(--sunset-soft)}
+.lvl.high i{background:#ff6b6b;box-shadow:0 0 10px #ff6b6b} .lvl.high{color:#ff6b6b}
+.lvl.ok i{background:var(--breeze);box-shadow:0 0 10px var(--breeze)} .lvl.ok{color:var(--breeze)}
+.fail .card h3{font-size:36px}
+.fail .card p{margin-top:auto}
+
+/* ---------- caminho da mensagem ---------- */
+.path{position:relative;margin-top:90px;padding:0 10px}
+.path .line{position:absolute;left:70px;right:70px;top:46px;height:2px;background:var(--hair)}
+.path .seg-f{position:absolute;top:46px;height:2px;background:repeating-linear-gradient(90deg,var(--sunset) 0 10px,transparent 10px 16px);opacity:.7}
+.path .packet{position:absolute;top:36px;left:60px;width:22px;height:22px;border-radius:50%;background:var(--accent);
+  box-shadow:0 0 24px var(--accent),0 0 60px var(--accent);opacity:0}
+.slide.on .path .packet{animation:packet 7s var(--ease) 1.4s infinite}
+@keyframes packet{0%{left:60px;opacity:0}4%{opacity:1}88%{opacity:1}96%,100%{left:calc(100% - 82px);opacity:0}}
+.nodes{display:flex;justify-content:space-between;position:relative;z-index:1}
+.node{display:flex;flex-direction:column;align-items:center;gap:22px;width:180px;text-align:center}
+.node .c{width:92px;height:92px;border-radius:50%;border:1px solid var(--mid);background:var(--canvas);display:grid;place-items:center;
+  font-family:var(--mono);font-size:22px;color:var(--body)}
+.node.end .c{border-color:var(--accent);color:var(--accent)}
+.node.fib .c{border-color:var(--sunset);color:var(--sunset);box-shadow:0 0 24px -6px var(--sunset)}
+.node b{font-weight:400;font-size:24px;line-height:1.25}
+.node small{font-family:var(--mono);font-size:15px;color:var(--mute);letter-spacing:1.4px;text-transform:uppercase}
+.proto{display:flex;gap:16px;margin-top:auto}
+
+/* ---------- 4 motivos ---------- */
+.why .card{display:flex;flex-direction:column;gap:20px;min-height:300px}
+.why .ico{width:64px;height:64px;border-radius:50%;border:1px solid color-mix(in srgb,var(--accent) 50%,transparent);display:grid;place-items:center;color:var(--accent)}
+.why .card h3{font-size:38px;margin-top:auto}
+
+/* ---------- decisão ---------- */
+.vs{display:grid;grid-template-columns:1fr 120px 1fr;align-items:stretch;gap:0;margin-top:70px}
+.vs .or{display:grid;place-items:center;font-family:var(--mono);color:var(--mute);font-size:24px;letter-spacing:2px}
+.vs .card{padding:50px;display:flex;flex-direction:column;gap:22px}
+.vs .card .price{font-size:120px;letter-spacing:-5px;line-height:1}
+.vs .card .price small{font-size:30px;letter-spacing:0;color:var(--mute);margin-left:10px}
+.vs .no{opacity:.55}
+.vs .no .price s{text-decoration-thickness:4px;text-decoration-color:#ff6b6b}
+.vs .yes-c{border-color:color-mix(in srgb,var(--accent) 55%,transparent)}
+.vs ul{list-style:none;display:flex;flex-direction:column;gap:14px}
+.vs li{font-size:28px;color:var(--body);font-weight:400;display:flex;gap:16px}
+.vs li:before{content:"—";color:var(--mute)}
+
+/* ---------- demo 3D ---------- */
+.slide.demo{padding:0;background:var(--canvas)}
+.slide.demo canvas.d3{position:absolute;left:0;top:0;width:1920px;height:1080px;display:block;cursor:grab;touch-action:none}
+.slide.demo canvas.d3:active{cursor:grabbing}
+.d3-vig{position:absolute;inset:0;pointer-events:none;
+  background:radial-gradient(ellipse 75% 70% at 55% 42%,transparent 55%,rgba(10,10,10,.7) 100%),linear-gradient(to top,rgba(10,10,10,.92) 0,rgba(10,10,10,0) 38%)}
+.d3-labels{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+.l3d{position:absolute;left:0;top:0;display:flex;align-items:center;gap:10px;margin:-17px 0 0 -5px;opacity:0;transition:opacity .6s var(--ease);
+  font-family:var(--mono);font-size:16px;letter-spacing:1.8px;text-transform:uppercase;color:var(--ink);white-space:nowrap;--lc:#ffffff}
+.l3d.on{opacity:1}
+.l3d i{width:10px;height:10px;border-radius:50%;background:var(--lc);box-shadow:0 0 14px var(--lc);flex:none}
+.l3d span{padding:7px 14px;border-radius:999px;border:1px solid color-mix(in srgb,var(--lc) 45%,transparent);background:rgba(10,10,10,.62);backdrop-filter:blur(6px)}
+.l3d.fib{--lc:#ff7a17}.l3d.cu{--lc:#a0c3ec}.l3d.wf{--lc:#c4b5fd}.l3d.g4{--lc:#ffc285}.l3d.ok{--lc:#6ee7b7}.l3d.bad{--lc:#ff5a5a}
+.d3-top{position:absolute;left:110px;top:60px;right:110px;display:flex;justify-content:space-between;align-items:center;pointer-events:none}
+.d3-top .mono{font-size:15px;color:var(--mute)}
+.d3-cap{position:absolute;left:110px;bottom:118px;max-width:1400px;pointer-events:none}
+.d3-cap>*{opacity:0;transform:translateY(14px);filter:blur(8px);transition:opacity .7s var(--ease),transform .8s var(--ease),filter .7s var(--ease)}
+.d3-cap.in>*{opacity:1;transform:none;filter:none}
+.d3-cap.in .d3-t{transition-delay:.08s}.d3-cap.in .d3-s{transition-delay:.16s}
+.d3-cap.hide{visibility:hidden}
+.d3-ey{font-family:var(--mono);font-size:19px;letter-spacing:2.4px;text-transform:uppercase;color:var(--mute)}
+.d3-t{font-size:74px;letter-spacing:-2.4px;line-height:1.02;margin-top:18px}
+.d3-s{font-size:28px;color:var(--body);margin-top:20px;line-height:1.4;max-width:1000px}
+.d3-dots{position:absolute;right:110px;bottom:62px;display:flex;gap:8px}
+.d3-dots button{font-family:var(--mono);font-size:13px;letter-spacing:1.2px;color:var(--mute);background:rgba(10,10,10,.5);border:1px solid rgba(255,255,255,.18);
+  border-radius:999px;padding:7px 11px;cursor:pointer;transition:all .4s var(--ease)}
+.d3-dots button.done{color:var(--body)}
+.d3-dots button.on{background:#fff;color:#0a0a0a;border-color:#fff}
+.d3-steps{position:absolute;right:110px;top:150px;list-style:none;display:flex;flex-direction:column;gap:14px;opacity:0;transform:translateX(16px);
+  transition:opacity .6s var(--ease),transform .7s var(--ease);pointer-events:none}
+.d3-steps.on{opacity:1;transform:none}
+.d3-steps li{font-size:24px;color:var(--mute);display:flex;gap:16px;align-items:center;padding:10px 20px;border-radius:999px;border:1px solid transparent;
+  background:rgba(10,10,10,.55);transition:all .35s var(--ease)}
+.d3-steps li b{font-family:var(--mono);font-weight:400;font-size:15px;letter-spacing:1.4px}
+.d3-steps li.done{color:var(--body)}
+.d3-steps li.on{color:#fff;border-color:rgba(160,195,236,.6);box-shadow:0 0 30px -8px #a0c3ec}
+.d3-steps li.on b{color:var(--breeze)}
+.d3-final{position:absolute;left:110px;bottom:118px;pointer-events:none}
+.d3-final>*{opacity:0;transform:translateY(18px);filter:blur(10px);transition:opacity .9s var(--ease),transform 1s var(--ease),filter .9s var(--ease)}
+.d3-final.on>*{opacity:1;transform:none;filter:none}
+.d3-final.on>:nth-child(2){transition-delay:.25s}.d3-final.on>:nth-child(3){transition-delay:.5s}
+.d3-final h1{font-size:120px;letter-spacing:-4.5px;margin-top:26px}
+.d3-final h1 em{font-style:normal;color:var(--mute)}
+.d3-final .chips{display:flex;gap:14px;margin-top:44px;flex-wrap:wrap}
+.d3-fallback{display:none;position:absolute;inset:0;place-items:center;text-align:center;color:var(--body);font-size:30px}
+
+/* modo estático (para conferência) */
+html.static *{transition:none!important;transition-delay:0s!important}
+
+/* impressão / pdf */
+@media print{
+  @page{size:1920px 1080px;margin:0}
+  html,body{overflow:visible;height:auto}
+  #bg,.glow,.grain,#hud,#bar,#hint{display:none}
+  #stage{position:relative;left:0;top:0;transform:none!important}
+  .slide{position:relative;opacity:1;visibility:visible;transform:none;page-break-after:always;height:1080px;background:var(--canvas)}
+  .a{opacity:1;transform:none;filter:none}
+  .budget .seg{width:var(--w)} .sq i{opacity:1;transform:none} .drow .fill{width:var(--w)}
+}
+</style>
+</head>
+<body>
+<canvas id="bg"></canvas>
+<div class="glow g1"></div><div class="glow g2"></div>
+<div class="grain"></div>
+<div id="bar"></div>
+<div id="hint">← → navegar · F tela cheia</div>
+
+<main id="stage">
+
+<!-- ============ 01 CAPA ============ -->
+<section class="slide center cover" data-p="0">
+  <div class="eyebrow a"><span class="dot"></span>Projeto de rede · Cenário 2</div>
+  <h1 class="a" style="margin-top:40px">Escola Municipal<br><em>três blocos,&nbsp;uma&nbsp;rede.</em></h1>
+  <div class="hr a" style="margin:70px 0 50px;width:560px"></div>
+  <div class="team a">
+    <span class="pill">Gabriel</span><span class="pill">Guilherme</span><span class="pill">Abner</span><span class="pill">Aurisnei</span>
+    <span class="pill acc">85 créditos · sobra 0</span>
+  </div>
+  <div class="mono mute a" style="font-size:20px;margin-top:40px">07 · 11 · 2026</div>
+</section>
+
+<!-- ============ 02 ROTEIRO ============ -->
+<section class="slide roster" data-p="0">
+  <div class="eyebrow a"><span class="dot"></span>Roteiro</div>
+  <h2 class="a">Quatro partes, quatro vozes.</h2>
+  <div class="grow"></div>
+  <div class="grid g4">
+    <div class="card a" style="--c:var(--breeze)"><div class="n">01</div><h3>Gabriel</h3><div class="mono mute" style="font-size:17px">Levantamento & classificação</div>
+      <ul><li>Conversa com o cliente</li><li>Critério prioritário</li><li>CAN · topologias</li></ul></div>
+    <div class="card a" style="--c:var(--sunset)"><div class="n">02</div><h3>Guilherme</h3><div class="mono mute" style="font-size:17px">Equipamentos & orçamento</div>
+      <ul><li>85 créditos</li><li>Equipamentos e portas</li><li>Fibra × cobre</li></ul></div>
+    <div class="card a" style="--c:var(--twilight)"><div class="n">03</div><h3>Abner</h3><div class="mono mute" style="font-size:17px">Meios, desenho & riscos</div>
+      <ul><li>Trechos e meios</li><li>Desenho da rede</li><li>Teste de falha</li></ul></div>
+    <div class="card a" style="--c:var(--sunset-soft)"><div class="n">04</div><h3>Aurisnei</h3><div class="mono mute" style="font-size:17px">Mensagem & decisões</div>
+      <ul><li>Caminho de um pacote</li><li>Resposta à diretora</li><li>Decisão descartada</li></ul></div>
+  </div>
+</section>
+
+<!-- ============ GABRIEL ============ -->
+<section class="slide center divider" data-p="1">
+  <div class="big a">01</div>
+  <h2 class="a">Levantamento<br>& classificação</h2>
+  <div class="presenter a"><div class="avatar">Ga</div><div><div style="font-size:34px">Gabriel</div><div class="mono mute" style="font-size:17px;margin-top:6px">Partes 1 e 2</div></div></div>
+</section>
+
+<section class="slide" data-p="1">
+  <div class="eyebrow a"><span class="dot"></span>Parte 1 · Conversa com o cliente</div>
+  <h2 class="a">Três perguntas à direção.</h2>
+  <div class="grow"></div>
+  <div>
+    <div class="qa a"><span class="num">P · 01</span><div class="q">Vídeos + notas ao mesmo tempo?<small>Acontecem juntos, nos dois turnos</small></div><span class="yes">SIM</span></div>
+    <div class="qa a"><span class="num">P · 02</span><div class="q">Corredor B → C é coberto?<small>Passagem protegida de sol e chuva</small></div><span class="yes">SIM</span></div>
+    <div class="qa a"><span class="num">P · 03</span><div class="q">Sala segura para o rack?<small>Sala trancada · roteador, nobreak e equipamentos centrais</small></div><span class="yes">SIM</span></div>
+  </div>
+</section>
+
+<section class="slide" data-p="1">
+  <div class="eyebrow a"><span class="dot"></span>Parte 1 · Suposições & prioridade</div>
+  <div class="grow"></div>
+  <div class="grid" style="grid-template-columns:1.1fr 1fr;gap:90px;align-items:end">
+    <div>
+      <div class="mono mute a" style="font-size:20px">Critério prioritário</div>
+      <div class="hero-stat a" style="margin-top:24px;font-size:112px;letter-spacing:-4px">Confiabilidade</div>
+      <p class="lead a" style="margin-top:40px">Diários de classe e matrículas dependem do sistema on-line.<br><span class="acc">Rede caiu = escola parada.</span></p>
+    </div>
+    <div class="grid" style="gap:24px">
+      <div class="card a"><div class="k">Suposição 01</div><div class="v">Alvenaria reduz o Wi-Fi</div><p>APs dentro de cada bloco</p></div>
+      <div class="card a"><div class="k">Suposição 02</div><div class="v">Biblioteca via cabo</div><p>Pesquisas estáveis, sem oscilação</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="slide" data-p="1">
+  <div class="eyebrow a"><span class="dot"></span>Parte 2 · Classificação da rede</div>
+  <h2 class="a">Que tipo de rede é essa?</h2>
+  <div class="grow"></div>
+  <div class="grid g2">
+    <div class="card a" style="padding:56px"><div class="k">Alcance</div><div class="v" style="font-size:110px;letter-spacing:-4px">CAN</div>
+      <p>Campus Area Network · 3 blocos no mesmo terreno · até 150 m</p></div>
+    <div class="card a" style="padding:56px"><div class="k">Modelo de cooperação</div><div class="v" style="font-size:110px;letter-spacing:-4px">Cliente<span class="mute">–</span>Servidor</div>
+      <p>PCs e notebooks pedem dados → sistema da prefeitura, vídeos e impressora</p></div>
+  </div>
+</section>
+
+<section class="slide" data-p="1">
+  <div class="eyebrow a"><span class="dot"></span>Parte 2 · Topologias</div>
+  <h2 class="a">Física em árvore. Lógica comutada.</h2>
+  <div class="grow"></div>
+  <div class="grid" style="grid-template-columns:1.35fr 1fr;gap:70px;align-items:center;margin-top:28px">
+    <svg class="a" viewBox="0 0 900 420" width="100%">
+      <defs><filter id="gl"><feGaussianBlur stdDeviation="4"/></filter></defs>
+      <!-- links -->
+      <line x1="150" y1="140" x2="450" y2="140" stroke="#ff7a17" stroke-width="3" class="flow"/>
+      <line x1="450" y1="140" x2="750" y2="140" stroke="#a0c3ec" stroke-width="3" class="flow"/>
+      <text x="300" y="118" fill="#ffc285" font-size="17" text-anchor="middle" letter-spacing="2">FIBRA · 120 M</text>
+      <text x="600" y="118" fill="#a0c3ec" font-size="17" text-anchor="middle" letter-spacing="2">COBRE · 60 M</text>
+      <!-- folhas -->
+      <g stroke="#363a3f" stroke-width="1.5">
+        <line x1="150" y1="140" x2="70" y2="320"/><line x1="150" y1="140" x2="150" y2="320"/><line x1="150" y1="140" x2="230" y2="320"/>
+        <line x1="450" y1="140" x2="350" y2="320"/><line x1="450" y1="140" x2="420" y2="320"/><line x1="450" y1="140" x2="490" y2="320"/><line x1="450" y1="140" x2="560" y2="320"/>
+        <line x1="750" y1="140" x2="680" y2="320"/><line x1="750" y1="140" x2="750" y2="320"/><line x1="750" y1="140" x2="820" y2="320"/>
+      </g>
+      <g fill="#0a0a0a" stroke="#7d8187" stroke-width="1.5">
+        <circle cx="70" cy="320" r="10"/><circle cx="150" cy="320" r="10"/><circle cx="230" cy="320" r="10"/>
+        <circle cx="350" cy="320" r="10"/><circle cx="420" cy="320" r="10"/><circle cx="490" cy="320" r="10"/><circle cx="560" cy="320" r="10"/>
+        <circle cx="680" cy="320" r="10"/><circle cx="750" cy="320" r="10"/><circle cx="820" cy="320" r="10"/>
+      </g>
+      <!-- blocos -->
+      <g font-size="26" text-anchor="middle">
+        <circle cx="150" cy="140" r="44" fill="#0a0a0a" stroke="#fff" stroke-width="1.5"/><text x="150" y="149" fill="#fff">A</text>
+        <circle cx="450" cy="140" r="44" fill="#0a0a0a" stroke="#fff" stroke-width="1.5"/><text x="450" y="149" fill="#fff">B</text>
+        <circle cx="750" cy="140" r="44" fill="#0a0a0a" stroke="#fff" stroke-width="1.5"/><text x="750" y="149" fill="#fff">C</text>
+      </g>
+      <circle cx="150" cy="140" r="56" fill="none" stroke="#a0c3ec" stroke-width="1" class="pulse"/>
+      <g font-size="15" fill="#7d8187" text-anchor="middle" letter-spacing="2">
+        <text x="150" y="380">ADMIN · INTERNET</text><text x="450" y="380">LAB · SALAS</text><text x="750" y="380">BIBLIOTECA</text>
+      </g>
+    </svg>
+    <div class="grid topo-cards" style="gap:20px">
+      <div class="card a"><div class="k">Física</div><div class="v">Estrela estendida</div><p>A → B → C · cada bloco em estrela no seu switch</p></div>
+      <div class="card a"><div class="k">Lógica · cabo</div><div class="v">Estrela comutada</div><p>Switch entrega só à porta certa · sem colisões</p></div>
+      <div class="card a"><div class="k">Lógica · Wi-Fi</div><div class="v">Barramento · multiponto</div><p>O ar é meio compartilhado</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ GUILHERME ============ -->
+<section class="slide center divider" data-p="2">
+  <div class="big a">02</div>
+  <h2 class="a">Equipamentos<br>& orçamento</h2>
+  <div class="presenter a"><div class="avatar">Gu</div><div><div style="font-size:34px">Guilherme</div><div class="mono mute" style="font-size:17px;margin-top:6px">Parte 3 · fibra × cobre</div></div></div>
+</section>
+
+<section class="slide" data-p="2">
+  <div class="eyebrow a"><span class="dot"></span>Parte 3 · Orçamento</div>
+  <div style="display:flex;justify-content:space-between;align-items:flex-end">
+    <h2 class="a">85 créditos.<br><span class="mute">Nenhum sobrando.</span></h2>
+    <div class="a" style="text-align:right"><div class="hero-stat">85<span class="mute" style="font-size:80px;letter-spacing:-2px">/85</span></div></div>
+  </div>
+  <div class="grow"></div>
+  <div class="budget a">
+    <div class="seg" style="--w:34.1%;background:#ff7a17">29</div>
+    <div class="seg" style="--w:17.6%;background:#ffc285">15</div>
+    <div class="seg" style="--w:14.1%;background:#c4b5fd">12</div>
+    <div class="seg" style="--w:14.1%;background:#a0c3ec">12</div>
+    <div class="seg" style="--w:11.8%;background:#dadbdf">10</div>
+    <div class="seg" style="--w:4.7%;background:#7c3aed;color:#fff">4</div>
+    <div class="seg" style="--w:3.5%;background:#7d8187">3</div>
+  </div>
+  <div class="legend">
+    <div class="a" style="--c:#ff7a17"><b>29</b><span>Pontos de rede cabeados</span></div>
+    <div class="a" style="--c:#ffc285"><b>15</b><span>3 APs Wi-Fi</span></div>
+    <div class="a" style="--c:#c4b5fd"><b>12</b><span>Fibra óptica A ↔ B</span></div>
+    <div class="a" style="--c:#a0c3ec"><b>12</b><span>3 switches de 8 portas</span></div>
+    <div class="a" style="--c:#dadbdf"><b>10</b><span>Switch de 24 portas</span></div>
+    <div class="a" style="--c:#7c3aed"><b>4</b><span>Modem 4G reserva</span></div>
+    <div class="a" style="--c:#7d8187"><b>3</b><span>Nobreak</span></div>
+  </div>
+</section>
+
+<section class="slide eq" data-p="2">
+  <div class="eyebrow a"><span class="dot"></span>Parte 3 · Onde fica cada coisa</div>
+  <h2 class="a">Equipamentos por bloco.</h2>
+  <div class="grow"></div>
+  <div class="grid g3">
+    <div class="card a"><h3>Bloco A <span class="pill" style="font-size:18px;padding:6px 16px">Admin</span></h3>
+      <div class="item">Switch 8 portas <b>expande o lotado</b></div>
+      <div class="item">Nobreak <b>sem queda de energia</b></div>
+      <div class="item">Modem 4G <b>internet reserva</b></div>
+      </div>
+    <div class="card a"><h3>Bloco B <span class="pill" style="font-size:18px;padding:6px 16px">Lab · Salas</span></h3>
+      <div class="item">Switch 24p <b>21 PCs sem lentidão</b></div>
+      <div class="item">Switch 8 portas <b>APs + link C</b></div>
+      <div class="item">2 APs Wi-Fi <b>4 salas</b></div>
+      <div class="item">21 pontos <b>laboratório</b></div></div>
+    <div class="card a"><h3>Bloco C <span class="pill" style="font-size:18px;padding:6px 16px">Biblioteca</span></h3>
+      <div class="item">Switch 8 portas <b>PCs + AP</b></div>
+      <div class="item">1 AP Wi-Fi <b>sala profs</b></div>
+      <div class="item">4 pontos <b>biblioteca</b></div>
+      </div>
+  </div>
+</section>
+
+<section class="slide" data-p="2">
+  <div class="eyebrow a"><span class="dot"></span>Parte 3 · Contagem de portas</div>
+  <h2 class="a">Cabe tudo — e sobra espaço.</h2>
+  <div class="grow"></div>
+  <div class="ports" id="ports"></div>
+</section>
+
+<section class="slide" data-p="2">
+  <div class="eyebrow a"><span class="dot"></span>Parte 3 · Por que fibra? · Limite de 100 m</div>
+  <h2 class="a">Por que fibra num trecho<br>e cobre no outro?</h2>
+  <div class="grow"></div>
+  <div class="dist" style="margin-top:0;margin-bottom:60px">
+    <div class="drow a" style="--wc:var(--sunset);--w:calc(100% * 120 / 130)">
+      <div class="hd"><h3>A → B · 120 m<small>Pátio aberto</small></h3><span class="pill acc" style="--accent:var(--sunset)">Fibra · imune a raios</span></div>
+      <div class="track"><div class="fill"></div><div class="limit"><span>LIMITE DO COBRE · 100 M</span></div></div>
+    </div>
+    <div class="drow a" style="--wc:var(--breeze);--w:calc(100% * 60 / 130)">
+      <div class="hd"><h3>B → C · 60 m<small>Corredor coberto</small></h3><span class="pill acc" style="--accent:var(--breeze)">Cobre · economiza créditos</span></div>
+      <div class="track"><div class="fill"></div><div class="limit" style="opacity:.25"></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ ABNER ============ -->
+<section class="slide center divider" data-p="3">
+  <div class="big a">03</div>
+  <h2 class="a">Meios, desenho<br>& riscos</h2>
+  <div class="presenter a"><div class="avatar">Ab</div><div><div style="font-size:34px">Abner</div><div class="mono mute" style="font-size:17px;margin-top:6px">Partes 4, 5 e 6</div></div></div>
+</section>
+
+<section class="slide" data-p="3">
+  <div class="eyebrow a"><span class="dot"></span>Parte 4 · Trechos e meios</div>
+  <h2 class="a">Cada trecho, o meio certo.</h2>
+  <div class="grow"></div>
+  <div>
+    <div class="link a"><div class="from">Bloco A → B<small>120 M · PÁTIO</small></div><div class="med"><span class="wire" style="--wc:var(--sunset)"></span>Fibra óptica</div><span class="tag">Ponto a ponto</span><span class="tag">Full-duplex</span></div>
+    <div class="link a"><div class="from">Bloco B → C<small>60 M · CORREDOR</small></div><div class="med"><span class="wire" style="--wc:var(--breeze)"></span>Cobre (par trançado)</div><span class="tag">Ponto a ponto</span><span class="tag">Full-duplex</span></div>
+    <div class="link a"><div class="from">Laboratório<small>21 MÁQUINAS</small></div><div class="med"><span class="wire" style="--wc:var(--breeze)"></span>Cobre · 1 cabo cada</div><span class="tag">Ponto a ponto</span><span class="tag">Full-duplex</span></div>
+    <div class="link a"><div class="from">Biblioteca<small>4 PCS</small></div><div class="med"><span class="wire" style="--wc:var(--breeze)"></span>Cobre (par trançado)</div><span class="tag">Ponto a ponto</span><span class="tag">Full-duplex</span></div>
+    <div class="link a"><div class="from">Notebooks<small>PROFESSORES</small></div><div class="med"><span class="wire dash" style="--wc:var(--twilight)"></span>Rádio · Wi-Fi</div><span class="tag warn">Multiponto</span><span class="tag warn">Half-duplex</span></div>
+  </div>
+</section>
+
+
+<section class="slide" data-p="3">
+  <div class="eyebrow a"><span class="dot"></span>Parte 5 · Desenho da rede</div>
+  <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:40px">
+    <h2 class="a" style="font-size:64px;margin-top:20px">Estrela hierárquica, três blocos.</h2>
+    <span class="pill a" style="font-size:18px;padding:8px 18px;color:var(--mute)">Clique para ampliar</span>
+  </div>
+  <div class="grow"></div>
+  <div class="shot a" id="shot"><img src="WhatsApp%20Image%202026-11-16%20at%2011.23.04.jpeg" alt="Diagrama da rede da escola com os blocos A, B e C"></div>
+</section>
+
+<section class="slide fail" data-p="3">
+  <div class="eyebrow a"><span class="dot"></span>Parte 6 · Teste de falha</div>
+  <h2 class="a">E se algo quebrar?</h2>
+  <div class="grow"></div>
+  <div class="grid g5" style="gap:22px">
+    <div class="card a"><span class="lvl low"><i></i>Impacto mínimo</span><h3>Um PC ou cabo</h3><p>Só aquele computador para.</p></div>
+    <div class="card a"><span class="lvl ok"><i></i>Coberto</span><h3>Link da operadora</h3><p>Modem 4G assume.</p></div>
+    <div class="card a"><span class="lvl ok"><i></i>Coberto</span><h3>Falta de energia</h3><p>Nobreak mantém roteador e secretaria.</p></div>
+    <div class="card a"><span class="lvl mid"><i></i>Parcial</span><h3>Fibra A ↔ B</h3><p>B e C sem internet. A segue.</p></div>
+    <div class="card a"><span class="lvl high"><i></i>Crítico</span><h3>Switch central A</h3><p>Escola toda sem internet.</p></div>
+  </div>
+</section>
+
+<section class="slide" data-p="3">
+  <div class="eyebrow a"><span class="dot"></span>Parte 6 · Gestão de riscos</div>
+  <div class="grow"></div>
+  <div class="grid" style="grid-template-columns:1.2fr 1fr;gap:90px;align-items:end">
+    <div>
+      <div class="mono mute a" style="font-size:20px">Ponto único de falha</div>
+      <h2 class="a" style="font-size:110px;letter-spacing:-4px">Roteador + switch<br>do Bloco A.</h2>
+    </div>
+    <div>
+      <div class="hero-stat a">7<span class="mute" style="font-size:60px;letter-spacing:-1px"> créditos</span></div>
+      <p class="lead a" style="margin-top:20px">investidos em segurança operacional</p>
+      <div class="a" style="display:flex;gap:14px;margin-top:34px"><span class="pill">4G reserva · 4</span><span class="pill">Nobreak · 3</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ AURISNEI ============ -->
+<section class="slide center divider" data-p="4">
+  <div class="big a">04</div>
+  <h2 class="a">Mensagem<br>& decisões</h2>
+  <div class="presenter a"><div class="avatar">Au</div><div><div style="font-size:34px">Aurisnei</div><div class="mono mute" style="font-size:17px;margin-top:6px">Partes 7, 8 e 9</div></div></div>
+</section>
+
+<section class="slide" data-p="4">
+  <div class="eyebrow a"><span class="dot"></span>Parte 7 · O caminho de uma mensagem</div>
+  <h2 class="a">Um aluno abre uma videoaula.</h2>
+  <div class="grow"></div>
+  <div class="path a" style="margin-top:0">
+    <div class="line"></div>
+    <div class="packet"></div>
+    <div class="nodes">
+      <div class="node end"><div class="c">PC</div><b>PC 05</b><small>Emissor</small></div>
+      <div class="node"><div class="c">UTP</div><b>Cabo de cobre</b><small>Lab</small></div>
+      <div class="node"><div class="c">24p</div><b>Switch 24p</b><small>Bloco B</small></div>
+      <div class="node"><div class="c">⇄</div><b>Conversor</b><small>Fibra</small></div>
+      <div class="node fib"><div class="c">120</div><b>Fibra óptica</b><small>Pátio</small></div>
+      <div class="node"><div class="c">SW</div><b>Switch</b><small>Bloco A</small></div>
+      <div class="node"><div class="c">R</div><b>Roteador</b><small>Operadora</small></div>
+      <div class="node end"><div class="c">www</div><b>Servidor</b><small>Receptor</small></div>
+    </div>
+  </div>
+  <div class="grow"></div>
+  <div class="proto">
+    <span class="pill a">Mensagem · requisição HTTPS</span>
+    <span class="pill a">IP · endereça e roteia</span>
+    <span class="pill a">TCP · entrega em ordem, sem perdas</span>
+  </div>
+</section>
+
+<section class="slide" data-p="4">
+  <div class="eyebrow a"><span class="dot"></span>Parte 8 · Resposta à diretora</div>
+  <h2 class="a">“Só um roteador potente<br>no meio do pátio?”</h2>
+  <div class="grow"></div>
+  <div class="grid g4 why">
+    <div class="card a"><div class="ico"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="4" width="18" height="12" rx="1"/><path d="M8 20h8M12 16v4"/><path d="M4 4l16 12"/></svg></div><div class="k mono mute" style="font-size:17px">01</div><h3>PCs do lab sem placa Wi-Fi</h3></div>
+    <div class="card a"><div class="ico"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 21V3h6v18M14 21V9h6v12"/></svg></div><div class="k mono mute" style="font-size:17px">02</div><h3>Paredes, árvores e 150 m enfraquecem o sinal</h3></div>
+    <div class="card a"><div class="ico"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="9"/><path d="M12 3v18M3 12h18"/></svg></div><div class="k mono mute" style="font-size:17px">03</div><h3>Banda dividida trava os vídeos</h3></div>
+    <div class="card a"><div class="ico"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="9" r="4"/><path d="M7 19l-1 2M12 19v3M17 19l1 2"/></svg></div><div class="k mono mute" style="font-size:17px">04</div><h3>Sol e chuva estragam o aparelho</h3></div>
+  </div>
+</section>
+
+<section class="slide center" data-p="4">
+  <div class="eyebrow a"><span class="dot"></span>Parte 8 · Em linguagem simples</div>
+  <div class="quote a" style="margin-top:50px;max-width:1500px">
+    “Seria como dar aula para três prédios fechados com <b>uma única caixa de som</b> no meio do pátio.”
+  </div>
+  <div class="hr a" style="width:300px"></div>
+  <div class="grid g2" style="max-width:1300px">
+    <div class="card a"><div class="k">Solução 01</div><div class="v">Fibra entre blocos + cabo no lab</div><p>Velocidade máxima, vídeos sem travar</p></div>
+    <div class="card a"><div class="k">Solução 02</div><div class="v">Wi-Fi dentro de cada bloco</div><p>Notebooks dos professores</p></div>
+  </div>
+</section>
+
+<section class="slide" data-p="4">
+  <div class="eyebrow a"><span class="dot"></span>Parte 9 · Decisão descartada</div>
+  <h2 class="a">Quase economizamos 6 créditos.</h2>
+  <div class="grow"></div>
+  <div class="vs" style="margin-top:0;margin-bottom:40px">
+    <div class="card no a"><div class="k">Rádio ponto a ponto</div><div class="price"><s>6</s><small>créditos</small></div>
+      <ul><li>Oscila com chuva e vento</li><li>Vídeos de 20 alunos travariam</li><li>Fere o critério: confiabilidade</li></ul></div>
+    <div class="or a">VS</div>
+    <div class="card yes-c a"><div class="k acc">Fibra óptica · escolhida</div><div class="price">12<small>créditos</small></div>
+      <ul><li>Banda estável o ano todo</li><li>Imune a raios no pátio</li><li>Cumpre o requisito principal</li></ul></div>
+  </div>
+</section>
+
+<!-- ============ DEMO 3D ============ -->
+<section class="slide demo" data-p="5">
+  <canvas class="d3"></canvas>
+  <div class="d3-vig"></div>
+  <div class="d3-labels"></div>
+  <div class="d3-top"><div class="eyebrow"><span class="dot"></span>Demonstração 3D · síntese do projeto</div><div class="mono">arraste para girar · → próximo capítulo</div></div>
+  <div class="d3-cap"><div class="d3-ey"></div><div class="d3-t"></div><div class="d3-s"></div></div>
+  <ol class="d3-steps"></ol>
+  <div class="d3-final">
+    <div class="eyebrow"><span class="dot"></span>Escola Municipal · três blocos, uma rede</div>
+    <h1>Confiável<em>,</em> no limite<br><em>do orçamento.</em></h1>
+    <div class="chips"><span class="pill">CAN · estrela estendida</span><span class="pill">Fibra 120 m + cobre 60 m</span><span class="pill">21 PCs + 3 APs</span><span class="pill">4G + nobreak</span><span class="pill solid">85 / 85 créditos</span></div>
+  </div>
+  <div class="d3-dots"></div>
+  <div class="d3-fallback"><div>A demonstração 3D precisa de WebGL.<br><span class="mute" style="font-size:22px">Abra no Chrome ou Edge com aceleração de hardware ligada.</span></div></div>
+</section>
+
+<!-- ============ ENCERRAMENTO ============ -->
+<section class="slide center cover" data-p="0">
+  <div class="eyebrow a"><span class="dot"></span>Resumo</div>
+  <h1 class="a" style="margin-top:40px;font-size:150px">Confiável<em>,</em> no limite<br><em>do orçamento.</em></h1>
+  <div class="a" style="display:flex;gap:16px;margin-top:70px;flex-wrap:wrap">
+    <span class="pill">CAN · cliente-servidor</span><span class="pill">Fibra + cobre</span><span class="pill">3 APs</span><span class="pill">4G + nobreak</span><span class="pill solid">85 / 85 créditos</span>
+  </div>
+  <div class="hr a" style="margin:70px 0 40px;width:560px"></div>
+  <div class="a" style="font-size:56px;letter-spacing:-1.5px">Obrigado. <span class="mute">Perguntas?</span></div>
+  <div class="mono mute a" style="font-size:18px;margin-top:24px">Gabriel · Guilherme · Abner · Aurisnei</div>
+</section>
+
+</main>
+
+<div id="hud"><div class="who"><i></i><span id="who"></span></div><div id="count"></div></div>
+<script src="vendor/three.min.js"></script>
+<script src="vendor/CopyShader.js"></script>
+<script src="vendor/LuminosityHighPassShader.js"></script>
+<script src="vendor/EffectComposer.js"></script>
+<script src="vendor/RenderPass.js"></script>
+<script src="vendor/ShaderPass.js"></script>
+<script src="vendor/UnrealBloomPass.js"></script>
+<script src="demo3d.js"></script>
+<div id="zoom"><img src="WhatsApp%20Image%202026-11-16%20at%2011.23.04.jpeg" alt=""></div>
+
+<script>
+(function(){
+  if(/static/.test(location.search))document.documentElement.classList.add('static');
+  var stage=document.getElementById('stage');
+  var slides=[].slice.call(document.querySelectorAll('.slide'));
+  var root=document.documentElement;
+  var people=[
+    {name:'Projeto de rede · Escola Municipal',c:'#a0c3ec'},
+    {name:'01 · Gabriel',c:'#a0c3ec'},
+    {name:'02 · Guilherme',c:'#ff7a17'},
+    {name:'03 · Abner',c:'#c4b5fd'},
+    {name:'04 · Aurisnei',c:'#ffc285'},
+    {name:'Demo 3D · todos',c:'#a0c3ec'}
+  ];
+
+  /* índice de animação automática */
+  slides.forEach(function(s){
+    [].slice.call(s.querySelectorAll('.a')).forEach(function(el,i){el.style.setProperty('--i',i)});
+  });
+
+  /* portas (gerado) */
+  var sw=[['Bloco A · switch antigo','8 portas',8,8],['Bloco A · switch novo','8 portas',4,8],['Bloco B · principal','24 portas',23,24],['Bloco B · auxiliar','8 portas',4,8],['Bloco C','8 portas',6,8]];
+  var ph=document.getElementById('ports');
+  sw.forEach(function(r){
+    var row=document.createElement('div');row.className='prow a';
+    var sq='';for(var k=0;k<r[3];k++)sq+='<i class="'+(k<r[2]?'u':'')+'" style="--d:'+k+'"></i>';
+    row.innerHTML='<div class="lbl">'+r[0]+'<small>'+r[1]+'</small></div><div class="sq">'+sq+'</div><div class="cnt">'+r[2]+'/'+r[3]+'<span>'+(r[3]===r[2]?'cheio':(r[3]-r[2])+' livre'+(r[3]-r[2]===1?'':'s'))+'</span></div>';
+    ph.appendChild(row);
+  });
+  [].slice.call(ph.parentNode.querySelectorAll('.a')).forEach(function(el,i){el.style.setProperty('--i',i)});
+
+  /* escala do palco */
+  function fit(){var s=Math.min(innerWidth/1920,innerHeight/1080);stage.style.transform='translate(-50%,-50%) scale('+s+')'}
+  addEventListener('resize',fit);fit();
+
+  var cur=-1;
+  var qch=(location.search.match(/ch=(\d+)/)||[])[1];
+  function isDemo(){return cur>=0&&slides[cur].classList.contains('demo')}
+  function go(n){
+    n=Math.max(0,Math.min(slides.length-1,n));
+    if(n===cur)return;
+    var prev=cur;
+    if(isDemo()&&window.DEMO3D)DEMO3D.leave();
+    if(cur>=0)slides[cur].classList.remove('on');
+    cur=n;
+    var s=slides[n];
+    void s.offsetWidth;
+    s.classList.add('on');
+    if(s.classList.contains('demo')&&window.DEMO3D)DEMO3D.enter(prev>n,qch!=null&&prev<0?+qch:null);
+    var p=people[+s.dataset.p||0];
+    root.style.setProperty('--accent',p.c);
+    document.getElementById('who').textContent=p.name;
+    document.getElementById('count').textContent=String(n+1).padStart(2,'0')+' / '+String(slides.length).padStart(2,'0');
+    document.getElementById('bar').style.width=((n+1)/slides.length*100)+'%';
+    try{history.replaceState(null,'','#'+(n+1))}catch(e){}
+  }
+  var start=parseInt((location.hash||'#1').slice(1),10)||1;
+  go(start-1);
+
+  addEventListener('keydown',function(e){
+    if(document.getElementById('zoom').classList.contains('on')){if(e.key==='Escape'||e.key===' ')closeZoom();return}
+    if(['ArrowRight','ArrowDown','PageDown',' ','Enter'].indexOf(e.key)>=0){e.preventDefault();if(isDemo()&&window.DEMO3D&&DEMO3D.next())return;go(cur+1)}
+    else if(['ArrowLeft','ArrowUp','PageUp','Backspace'].indexOf(e.key)>=0){e.preventDefault();if(isDemo()&&window.DEMO3D&&DEMO3D.prev())return;go(cur-1)}
+    else if(e.key==='Home')go(0);
+    else if(e.key==='End')go(slides.length-1);
+    else if(e.key==='f'||e.key==='F'){if(!document.fullscreenElement)document.documentElement.requestFullscreen&&document.documentElement.requestFullscreen();else document.exitFullscreen()}
+  });
+  document.addEventListener('click',function(e){
+    if(e.target.closest('#shot')){document.getElementById('zoom').classList.add('on');return}
+    if(e.target.closest('#zoom')){closeZoom();return}
+    if(e.target.closest('.slide.demo'))return;
+    if(e.clientX>innerWidth*0.3)go(cur+1);else go(cur-1);
+  });
+  function closeZoom(){document.getElementById('zoom').classList.remove('on')}
+  var tx=null;
+  addEventListener('touchstart',function(e){tx=e.touches[0].clientX},{passive:true});
+  addEventListener('touchend',function(e){if(tx===null)return;var d=e.changedTouches[0].clientX-tx;if(Math.abs(d)>50&&!e.target.closest('.slide.demo canvas')){var f=d<0;if(!(isDemo()&&window.DEMO3D&&(f?DEMO3D.next():DEMO3D.prev())))go(cur+(f?1:-1))}tx=null});
+  setTimeout(function(){document.getElementById('hint').style.opacity=0},5000);
+
+  /* fundo: rede de nós à deriva */
+  var cv=document.getElementById('bg'),ctx=cv.getContext('2d'),W,H,dpr,pts=[];
+  function size(){dpr=Math.min(devicePixelRatio||1,2);W=innerWidth;H=innerHeight;cv.width=W*dpr;cv.height=H*dpr;cv.style.width=W+'px';cv.style.height=H+'px';ctx.setTransform(dpr,0,0,dpr,0,0)}
+  size();addEventListener('resize',size);
+  var N=Math.round(Math.min(70,W*H/22000));
+  for(var i=0;i<N;i++)pts.push({x:Math.random()*W,y:Math.random()*H,vx:(Math.random()-.5)*.18,vy:(Math.random()-.5)*.18,r:Math.random()*1.4+.4});
+  var reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
+  function hexA(h,a){var n=parseInt(h.slice(1),16);return 'rgba('+(n>>16)+','+(n>>8&255)+','+(n&255)+','+a+')'}
+  function frame(){
+    ctx.clearRect(0,0,W,H);
+    var col=(getComputedStyle(root).getPropertyValue('--accent')||'#a0c3ec').trim();
+    if(col.charAt(0)!=='#')col='#a0c3ec';
+    for(var i=0;i<pts.length;i++){var p=pts[i];p.x+=p.vx;p.y+=p.vy;
+      if(p.x<-20)p.x=W+20;if(p.x>W+20)p.x=-20;if(p.y<-20)p.y=H+20;if(p.y>H+20)p.y=-20;}
+    for(i=0;i<pts.length;i++){for(var j=i+1;j<pts.length;j++){var a=pts[i],b=pts[j],dx=a.x-b.x,dy=a.y-b.y,d=dx*dx+dy*dy;
+      if(d<26000){ctx.strokeStyle=hexA(col,.10*(1-d/26000));ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke()}}}
+    for(i=0;i<pts.length;i++){ctx.fillStyle='rgba(255,255,255,.28)';ctx.beginPath();ctx.arc(pts[i].x,pts[i].y,pts[i].r,0,7);ctx.fill()}
+    if(!reduce)requestAnimationFrame(frame);
+  }
+  frame();
+})();
+</script>
+</body>
+</html>
