@@ -37,9 +37,13 @@
   ];
 
   /* ---------------- estado ---------------- */
-  var host, canvas, hud, renderer, scene, camera, composer, clock;
+  var host, canvas, hud, renderer, scene, camera, composer, bloomPass, clock;
   var ready = false, active = false, ch = 0, chT = 0, time = 0, raf = 0;
-  var camPos, camTg, wantPos, wantTg, yawUser = 0, pitchUser = 0, dragging = false;
+  var camPos, camTg, wantPos, wantTg, camVel, tgVel;
+  var yawUser = 0, pitchUser = 0, yawVel = 0, pitchVel = 0, dragging = false;
+  var hoverX = 0, hoverY = 0, hoverTX = 0, hoverTY = 0;
+  var curFov = 40, fovVel = 0, baseBloom = .55;
+  var reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   var labels = [], updaters = [];
   var S = { power: 1, fiber: 1, op: 1, topo: 0, rain: 0, packet: 0, lab: 0, final: 0, bolt: 0 };
   var T = {};
@@ -67,6 +71,13 @@
   }
   function lerp(a, b, k) { return a + (b - a) * k; }
   function ease(k) { return k < .5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2; }
+  function springVec(pos, vel, target, stiffness, damping, dt) {
+    var fx = (target.x - pos.x) * stiffness, fy = (target.y - pos.y) * stiffness, fz = (target.z - pos.z) * stiffness;
+    vel.x = (vel.x + fx * dt) * Math.exp(-damping * dt);
+    vel.y = (vel.y + fy * dt) * Math.exp(-damping * dt);
+    vel.z = (vel.z + fz * dt) * Math.exp(-damping * dt);
+    pos.x += vel.x * dt; pos.y += vel.y * dt; pos.z += vel.z * dt;
+  }
 
   function canvasTex(size, draw, rep) {
     var c = document.createElement('canvas'); c.width = c.height = size;
@@ -121,7 +132,7 @@
     el.className = 'l3d' + (kind ? ' ' + kind : '');
     el.innerHTML = '<i></i><span>' + text + '</span>';
     host.querySelector('.d3-labels').appendChild(el);
-    labels.push({ el: el, p: pos, chs: chs });
+    labels.push({ el: el, p: pos, chs: chs, sx: 0, sy: 0, hasPos: false, idx: labels.length });
   }
 
   /* =================================================================
@@ -168,9 +179,20 @@
 
     /* mangueiras no pátio (citadas na Parte 8) */
     var trunk = std(0x3a2c20, { roughness: .9 }), leaf = std(0x1e3327, { roughness: .85, flatShading: true });
+    var crowns = [];
     [[-49, 12], [-19, 13], [-44, -15], [-36, -18], [-27, -14], [-19, -17], [-46, -9]].forEach(function (p, i) {
       var t = add(new THREE.Mesh(new THREE.CylinderGeometry(.28, .4, 2.6, 7), trunk)); t.position.set(p[0], 1.3, p[1]); t.castShadow = true;
       var c = add(new THREE.Mesh(new THREE.IcosahedronGeometry(2.3 + (i % 3) * .4, 0), leaf)); c.position.set(p[0], 3.9, p[1]); c.rotation.set(i, i * 2, 0); c.castShadow = true; c.receiveShadow = true;
+      crowns.push({ m: c, rx: i, ry: i * 2, ph: i * 1.1 });
+    });
+    updaters.push(function (dt, t) {
+      if (reduceMotion) return;
+      var wind = .025 + S.rain * .085;
+      for (var i = 0; i < crowns.length; i++) {
+        var cr = crowns[i];
+        cr.m.rotation.z = Math.sin(t * (1.2 + S.rain * 2.2) + cr.ph) * wind;
+        cr.m.rotation.x = cr.rx + Math.cos(t * .9 + cr.ph) * wind * .6;
+      }
     });
 
     /* materiais compartilhados */
@@ -363,16 +385,23 @@
 
     // Internet (operadora) e link do roteador
     R.net = V(-82, 22, -40);
-    var globe = add(new THREE.Mesh(new THREE.IcosahedronGeometry(5, 1), new THREE.MeshBasicMaterial({ color: 0xffffff, wireframe: true, transparent: true, opacity: .55 })));
-    globe.position.copy(R.net);
-    var core = add(new THREE.Mesh(new THREE.IcosahedronGeometry(3.2, 2), glow(C.copper, .9))); core.position.copy(R.net);
-    var orbit = add(new THREE.Group()); orbit.position.copy(R.net);
+    var netGroup = add(new THREE.Group()); netGroup.position.copy(R.net);
+    var globe = add(new THREE.Mesh(new THREE.IcosahedronGeometry(5, 1), new THREE.MeshBasicMaterial({ color: 0xffffff, wireframe: true, transparent: true, opacity: .55 })), netGroup);
+    var core = add(new THREE.Mesh(new THREE.IcosahedronGeometry(3.2, 2), glow(C.copper, .9)), netGroup);
+    var haloRing = add(new THREE.Mesh(new THREE.TorusGeometry(6.8, .05, 8, 64), basic(C.copper, { transparent: true, opacity: .35 })), netGroup);
+    haloRing.rotation.x = Math.PI / 2.4; haloRing.rotation.y = .3;
+    var orbit = add(new THREE.Group(), netGroup);
     for (var i = 0; i < 18; i++) {
       var d = add(new THREE.Mesh(new THREE.SphereGeometry(.18, 8, 8), basic(0xffffff)), orbit);
       var a = i / 18 * Math.PI * 2, r = 7 + (i % 3);
       d.position.set(Math.cos(a) * r, Math.sin(a * 3) * 1.6, Math.sin(a) * r);
     }
-    updaters.push(function (dt, t) { globe.rotation.y = t * .12; globe.rotation.x = t * .05; orbit.rotation.y = -t * .3; core.rotation.y = t * .2; });
+    updaters.push(function (dt, t) {
+      globe.rotation.y = t * .12; globe.rotation.x = t * .05;
+      orbit.rotation.y = -t * .3; core.rotation.y = t * .2;
+      haloRing.rotation.z = t * .15;
+      if (!reduceMotion) netGroup.position.y = R.net.y + Math.sin(t * .9) * .65;
+    });
     R.globe = globe;
 
     R.opCurve = new THREE.CatmullRomCurve3([V(-58, 3.75, -4.2), V(-58, 6.6, -4.6), V(-60, 12, -16), V(-70, 18, -31), V(-78.5, 21, -37.5)], false, 'centripetal');
@@ -403,8 +432,14 @@
     function m(c, o) { var x = basic(c, { transparent: true, opacity: 0, depthWrite: false }); x.base = o; mats.push(x); return x; }
     function lm(c, o) { var x = new THREE.LineBasicMaterial({ color: c, transparent: true, opacity: 0 }); x.base = o; mats.push(x); return x; }
     var hubs = [V(-62, 16, 0), V(0, 16, 0), V(34, 16, 0)];
-    var hm = m(0xffffff, 1);
-    hubs.forEach(function (h) { var s = add(new THREE.Mesh(new THREE.SphereGeometry(1.1, 24, 24), hm), g); s.position.copy(h); });
+    var hm = m(0xffffff, 1), hringM = m(C.copper, .45);
+    var hubMeshes = [], leafNodes = [];
+    hubs.forEach(function (h, i) {
+      var s = add(new THREE.Mesh(new THREE.SphereGeometry(1.1, 24, 24), hm), g); s.position.copy(h);
+      var hr = add(new THREE.Mesh(new THREE.TorusGeometry(1.9, .05, 8, 40), hringM), g);
+      hr.position.copy(h); hr.rotation.x = Math.PI / 2;
+      hubMeshes.push({ s: s, r: hr, baseY: h.y, ph: i * 1.4 });
+    });
     line([hubs[0], hubs[1]], lm(C.fiber, 1), g); line([hubs[1], hubs[2]], lm(C.copper, 1), g);
     var leaf = m(C.copper, .9), ll = lm(0xffffff, .35), vl = new THREE.LineDashedMaterial({ color: 0xffffff, dashSize: .5, gapSize: .5, transparent: true, opacity: 0 }); vl.base = .25; mats.push(vl);
     var counts = [7, 12, 6], spread = [7, 11, 6];
@@ -412,9 +447,25 @@
       for (var k = 0; k < counts[i]; k++) {
         var a = (k / counts[i]) * Math.PI * 2, p = V(h.x + Math.cos(a) * spread[i], 11.5, h.z + Math.sin(a) * spread[i] * .7);
         var s = add(new THREE.Mesh(new THREE.SphereGeometry(.35, 12, 12), leaf), g); s.position.copy(p);
+        leafNodes.push({ s: s, baseY: p.y, ph: i * 1.1 + k * .55, delay: (i * .12 + k * .025) });
         line([h, p], ll, g);
       }
       line([h, V(h.x, 6.6, h.z)], vl, g);
+    });
+    updaters.push(function (dt, t) {
+      if (S.topo < .01) return;
+      for (var i = 0; i < hubMeshes.length; i++) {
+        var hmItem = hubMeshes[i], bob = reduceMotion ? 0 : Math.sin(t * 1.6 + hmItem.ph) * .35;
+        hmItem.s.position.y = hmItem.baseY + bob;
+        hmItem.r.position.y = hmItem.baseY + bob;
+        hmItem.r.scale.setScalar(.85 + S.topo * .25 + (reduceMotion ? 0 : Math.sin(t * 2 + hmItem.ph) * .08));
+        hmItem.s.scale.setScalar(.3 + .7 * S.topo);
+      }
+      for (var j = 0; j < leafNodes.length; j++) {
+        var ln = leafNodes[j], localK = Math.max(0, Math.min(1, (S.topo - ln.delay * .4) * 1.3));
+        ln.s.scale.setScalar(Math.max(.001, ease(localK)));
+        ln.s.position.y = ln.baseY + (1 - localK) * -1.4 + (reduceMotion ? 0 : Math.sin(t * 2.1 + ln.ph) * .22);
+      }
     });
     R.topoMats = mats;
   }
@@ -475,12 +526,45 @@
     });
     M.pk = basic(0xffffff);
     R.pk = add(new THREE.Mesh(new THREE.SphereGeometry(.55, 20, 20), M.pk));
+    R.pkAura = add(new THREE.Mesh(new THREE.SphereGeometry(.95, 16, 16), basic(C.copper, { transparent: true, opacity: .28, depthWrite: false })));
+    R.pkRingMat = basic(0xffffff, { transparent: true, opacity: 0, side: THREE.DoubleSide, depthWrite: false });
+    R.pkRing = add(new THREE.Mesh(new THREE.RingGeometry(.75, 1, 40), R.pkRingMat));
+    R.pkRing.rotation.x = -Math.PI / 2; R.pkRingK = 1; R.pkLastStep = -1;
     R.pkTrail = [];
     for (var t = 0; t < 14; t++) {
       var tm = add(new THREE.Mesh(new THREE.SphereGeometry(.42 * (1 - t / 16), 12, 12), basic(C.copper, { transparent: true, opacity: .7 * (1 - t / 14) })));
       R.pkTrail.push(tm);
     }
     R.pkLight = add(new THREE.PointLight(0xffffff, 0, 16, 2));
+
+    // motes flutuantes (atmosfera espacial Antigravity)
+    var mn = 140, mpos = new Float32Array(mn * 3), mseed = [];
+    var mtex = canvasTex(64, function (g, s) {
+      var gr = g.createRadialGradient(s / 2, s / 2, 0, s / 2, s / 2, s / 2);
+      gr.addColorStop(0, 'rgba(255,255,255,1)');
+      gr.addColorStop(.4, 'rgba(255,255,255,.35)');
+      gr.addColorStop(1, 'rgba(255,255,255,0)');
+      g.fillStyle = gr; g.fillRect(0, 0, s, s);
+    });
+    for (i = 0; i < mn; i++) {
+      var mx = -110 + Math.random() * 170, my = 2 + Math.random() * 34, mz = -50 + Math.random() * 75;
+      mpos[i * 3] = mx; mpos[i * 3 + 1] = my; mpos[i * 3 + 2] = mz;
+      mseed.push({ x: mx, y: my, z: mz, sp: .25 + Math.random() * .55, ph: Math.random() * 10 });
+    }
+    var mg = new THREE.BufferGeometry(); mg.setAttribute('position', new THREE.BufferAttribute(mpos, 3));
+    M.motes = new THREE.PointsMaterial({ color: C.copper, size: .75, map: mtex, transparent: true, opacity: .38, depthWrite: false, blending: THREE.AdditiveBlending });
+    R.motes = add(new THREE.Points(mg, M.motes));
+    updaters.push(function (dt, t) {
+      if (reduceMotion) return;
+      var a = mg.attributes.position.array;
+      for (var i = 0; i < mn; i++) {
+        var s = mseed[i];
+        a[i * 3] = s.x + Math.sin(t * s.sp + s.ph) * 1.4;
+        a[i * 3 + 1] = s.y + Math.cos(t * s.sp * .8 + s.ph) * 1.1;
+        a[i * 3 + 2] = s.z + Math.sin(t * s.sp * .6 + s.ph * 1.3) * 1.2;
+      }
+      mg.attributes.position.needsUpdate = true;
+    });
 
     // faíscas no rompimento da fibra
     var sn = 160, sp = new Float32Array(sn * 3), sv = [];
@@ -624,44 +708,94 @@
     } else { M.bolt.opacity = 0; R.flash.intensity = 0; R.hemi.intensity = .28; }
     // pacote (Parte 7)
     var pkOn = S.packet > .05;
-    R.pk.visible = pkOn; R.pkTrail.forEach(function (m) { m.visible = pkOn; });
+    R.pk.visible = pkOn; R.pkAura.visible = pkOn; R.pkTrail.forEach(function (m) { m.visible = pkOn; });
     if (pkOn) {
       var u = ((chT - .8) / 6.5) % 1; if (u < 0) u = 0;
       var e = ease(u);
       R.pk.position.copy(R.pkCurve.getPointAt(e)); R.pk.scale.setScalar(S.packet * (1 + .18 * Math.sin(time * 8)));
+      R.pkAura.position.copy(R.pk.position); R.pkAura.scale.setScalar(S.packet * (1 + .32 * Math.sin(time * 5)));
       R.pkLight.position.copy(R.pk.position); R.pkLight.intensity = 4 * S.packet;
       R.pkTrail.forEach(function (m, i) { m.position.copy(R.pkCurve.getPointAt(Math.max(0, ease(Math.max(0, u - (i + 1) * .006))))); });
+      var cur = 0; R.pkSteps.forEach(function (s, i) { if (e >= s.u - .004) cur = i; });
+      if (cur !== R.pkLastStep) {
+        R.pkLastStep = cur;
+        R.pkRingK = 0;
+        R.pkRing.position.copy(R.pkSteps[cur].p);
+      }
+      if (R.pkRingK < 1) {
+        R.pkRingK = Math.min(1, R.pkRingK + dt * 1.9);
+        var rk = ease(R.pkRingK);
+        R.pkRing.visible = true;
+        R.pkRing.scale.setScalar(.8 + rk * 3.8);
+        R.pkRingMat.opacity = (1 - rk) * .8 * S.packet;
+      } else { R.pkRing.visible = false; }
       if (stepsEl) {
-        var cur = 0; R.pkSteps.forEach(function (s, i) { if (e >= s.u - .004) cur = i; });
         for (var i = 0; i < stepKeys.length; i++) stepKeys[i].className = i < cur ? 'done' : (i === cur ? 'on' : '');
       }
-    } else R.pkLight.intensity = 0;
+    } else { R.pkLight.intensity = 0; R.pkRing.visible = false; }
+    // bloom dinâmico sutil
+    if (bloomPass) {
+      var targetBloom = baseBloom + (ch === 2 && R.flash.intensity > .5 ? .25 : 0);
+      bloomPass.strength = lerp(bloomPass.strength, targetBloom, Math.min(1, dt * 4));
+    }
     // atualizadores
     for (var j = 0; j < updaters.length; j++) updaters[j](dt, time);
 
-    /* ---- câmera ---- */
-    var ck = 1 - Math.exp(-dt * 1.35);
-    camPos.lerp(wantPos, ck); camTg.lerp(wantTg, ck);
-    var yaw = yawUser + Math.sin(time * .16) * .05 + (CH[ch].final ? chT * .06 : 0);
+    /* ---- câmera (spring physics + micro-parallax + FOV breathing) ---- */
+    if (!camVel) camVel = V(0, 0, 0);
+    if (!tgVel) tgVel = V(0, 0, 0);
+    springVec(camPos, camVel, wantPos, 17, 7.6, dt);
+    springVec(camTg, tgVel, wantTg, 19, 8.2, dt);
+
+    hoverX = lerp(hoverX, reduceMotion ? 0 : hoverTX, Math.min(1, dt * 4.5));
+    hoverY = lerp(hoverY, reduceMotion ? 0 : hoverTY, Math.min(1, dt * 4.5));
+
+    if (!dragging) {
+      yawUser += yawVel * dt * 60;
+      pitchUser += pitchVel * dt * 60;
+      yawVel *= Math.pow(.04, dt);
+      pitchVel *= Math.pow(.04, dt);
+      yawUser *= Math.pow(.22, dt);
+      pitchUser *= Math.pow(.22, dt);
+    }
+    yawUser = Math.max(-1.6, Math.min(1.6, yawUser));
+    pitchUser = Math.max(-.5, Math.min(.5, pitchUser));
+
+    var speed = camVel.length();
+    var targetFov = reduceMotion ? 40 : (40 + Math.min(4.2, speed * .038));
+    var fovF = (targetFov - curFov) * 14;
+    fovVel = (fovVel + fovF * dt) * Math.exp(-7 * dt);
+    curFov += fovVel * dt;
+    if (Math.abs(camera.fov - curFov) > .02) { camera.fov = curFov; camera.updateProjectionMatrix(); }
+
+    var idleYaw = reduceMotion ? 0 : Math.sin(time * .16) * .045;
+    var yaw = yawUser + hoverX * .055 + idleYaw + (CH[ch].final ? chT * .06 : 0);
     var rel = camPos.clone().sub(camTg);
     var rad = rel.length(), th = Math.atan2(rel.x, rel.z) + yaw, ph = Math.acos(Math.min(1, Math.max(-1, rel.y / rad)));
-    ph = Math.min(1.45, Math.max(.12, ph - pitchUser));
+    ph = Math.min(1.45, Math.max(.12, ph - pitchUser - hoverY * .032));
     camera.position.set(camTg.x + rad * Math.sin(ph) * Math.sin(th), camTg.y + rad * Math.cos(ph), camTg.z + rad * Math.sin(ph) * Math.cos(th));
     camera.lookAt(camTg);
-    if (!dragging) { yawUser *= Math.pow(.25, dt); pitchUser *= Math.pow(.25, dt); }
 
     /* ---- render ---- */
     if (composer) composer.render(); else renderer.render(scene, camera);
 
-    /* ---- rótulos ---- */
-    var v = new THREE.Vector3();
+    /* ---- rótulos (interpolação suave + profundidade) ---- */
+    var v = new THREE.Vector3(), lk = Math.min(1, dt * 16);
     for (var l = 0; l < labels.length; l++) {
       var L = labels[l], show = L.chs.indexOf(ch) >= 0;
       v.copy(L.p).project(camera);
       if (show && v.z < 1 && Math.abs(v.x) < 1.05 && Math.abs(v.y) < 1.05) {
-        L.el.style.transform = 'translate(' + ((v.x + 1) / 2 * W).toFixed(1) + 'px,' + ((1 - v.y) / 2 * H).toFixed(1) + 'px)';
+        var tx = (v.x + 1) / 2 * W, ty = (1 - v.y) / 2 * H;
+        if (!L.hasPos) { L.sx = tx; L.sy = ty; L.hasPos = true; }
+        else { L.sx = lerp(L.sx, tx, lk); L.sy = lerp(L.sy, ty, lk); }
+        var dist = camera.position.distanceTo(L.p);
+        var sc = Math.max(.84, Math.min(1.06, 1.06 - (dist - 35) * .0016));
+        L.el.style.transform = 'translate3d(' + L.sx.toFixed(1) + 'px,' + L.sy.toFixed(1) + 'px,0) scale(' + sc.toFixed(3) + ')';
         L.el.classList.add('on');
-      } else L.el.classList.remove('on');
+      } else {
+        L.el.classList.remove('on');
+        L.hasPos = false;
+      }
     }
   }
 
@@ -672,9 +806,21 @@
     ch = Math.max(0, Math.min(CH.length - 1, i)); chT = 0;
     var c = CH[ch];
     wantPos = V(c.cam[0], c.cam[1], c.cam[2]); wantTg = V(c.tg[0], c.tg[1], c.tg[2]);
-    if (instant) { camPos = wantPos.clone(); camTg = wantTg.clone(); }
+    if (instant) { camPos = wantPos.clone(); camTg = wantTg.clone(); camVel = V(0, 0, 0); tgVel = V(0, 0, 0); }
     setTargets(); if (instant) for (var k in T) S[k] = T[k];
     if (ch === 2) S.bolt = -1.2;
+    R.pkLastStep = -1;
+    baseBloom = (ch === 1 || ch === 5 || ch === 6 || ch === 10) ? .64 : .52;
+    var visIdx = 0;
+    for (var l = 0; l < labels.length; l++) {
+      var L = labels[l];
+      if (L.chs.indexOf(ch) >= 0) {
+        L.el.style.transitionDelay = (instant ? 0 : (140 + visIdx * 75)) + 'ms';
+        visIdx++;
+      } else {
+        L.el.style.transitionDelay = '0ms';
+      }
+    }
     var cap = host.querySelector('.d3-cap');
     cap.classList.remove('in');
     clearTimeout(setChapter.tm);
@@ -707,7 +853,8 @@
     if (THREE.EffectComposer && THREE.UnrealBloomPass) {
       composer = new THREE.EffectComposer(renderer);
       composer.addPass(new THREE.RenderPass(scene, camera));
-      composer.addPass(new THREE.UnrealBloomPass(new THREE.Vector2(W, H), .55, .45, .62));
+      bloomPass = new THREE.UnrealBloomPass(new THREE.Vector2(W, H), .52, .45, .62);
+      composer.addPass(bloomPass);
       composer.setSize(W, H);
     }
     buildLabels();
@@ -722,14 +869,21 @@
     dots.innerHTML = CH.map(function (c, i) { return '<button title="' + (c.t || c.ey) + '">' + String(i + 1).padStart(2, '0') + '</button>'; }).join('');
     [].forEach.call(dots.querySelectorAll('button'), function (b, i) { b.addEventListener('click', function (e) { e.stopPropagation(); setChapter(i); }); });
 
-    // arrastar para girar
+    // arrastar para girar + micro-parallax no hover
     var lx = 0, ly = 0;
-    canvas.addEventListener('pointerdown', function (e) { dragging = true; lx = e.clientX; ly = e.clientY; canvas.setPointerCapture(e.pointerId); });
+    canvas.addEventListener('pointerdown', function (e) { dragging = true; yawVel = 0; pitchVel = 0; lx = e.clientX; ly = e.clientY; canvas.setPointerCapture(e.pointerId); });
     canvas.addEventListener('pointermove', function (e) {
+      var rect = canvas.getBoundingClientRect();
+      hoverTX = ((e.clientX - rect.left) / Math.max(1, rect.width) - .5) * 2;
+      hoverTY = ((e.clientY - rect.top) / Math.max(1, rect.height) - .5) * 2;
       if (!dragging) return;
-      yawUser -= (e.clientX - lx) * .005; pitchUser += (e.clientY - ly) * .003; lx = e.clientX; ly = e.clientY;
+      var dy = -(e.clientX - lx) * .005, dp = (e.clientY - ly) * .003;
+      yawUser += dy; pitchUser += dp;
+      yawVel = dy * .45; pitchVel = dp * .45;
+      lx = e.clientX; ly = e.clientY;
       yawUser = Math.max(-1.6, Math.min(1.6, yawUser)); pitchUser = Math.max(-.5, Math.min(.5, pitchUser));
     });
+    canvas.addEventListener('pointerleave', function () { hoverTX = 0; hoverTY = 0; });
     canvas.addEventListener('pointerup', function () { dragging = false; });
     addEventListener('resize', fitDPR);
 
