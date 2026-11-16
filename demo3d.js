@@ -44,7 +44,7 @@
   var hoverX = 0, hoverY = 0, hoverTX = 0, hoverTY = 0;
   var curFov = 40, fovVel = 0, baseBloom = .55;
   var reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  var labels = [], updaters = [];
+  var labels = [], updaters = [], EXT = null;
   var S = { power: 1, fiber: 1, op: 1, topo: 0, rain: 0, packet: 0, lab: 0, final: 0, bolt: 0 };
   var T = {};
   var M = {};             // materiais compartilhados
@@ -223,6 +223,7 @@
     buildLinks();
     buildTopology();
     buildExtras();
+    buildCampusLife();
   }
 
   function building(cx, cz, w, d, h) {
@@ -590,6 +591,223 @@
     R.cut = cut;
   }
 
+  /* ---------------- ambiente vivo, props e interatividade ---------------- */
+  var interactables = [], pings = [];
+
+  function spawnPing(pos, color, maxScale) {
+    var m = basic(color || 0xffffff, { transparent: true, opacity: .9, side: THREE.DoubleSide, depthWrite: false });
+    var mesh = add(new THREE.Mesh(new THREE.RingGeometry(.55, .85, 36), m));
+    mesh.rotation.x = -Math.PI / 2;
+    mesh.position.set(pos.x, Math.max(.12, pos.y), pos.z);
+    pings.push({ m: mesh, mat: m, k: 0, max: maxScale || 4.5 });
+  }
+
+  function registerInteractive(mesh, info) {
+    mesh.userData.interactive = info;
+    interactables.push(mesh);
+  }
+
+  function buildCampusLife() {
+    // anel de hover 3D
+    M.hoverRing = basic(C.copper, { transparent: true, opacity: 0, side: THREE.DoubleSide, depthWrite: false });
+    R.hoverRing = add(new THREE.Mesh(new THREE.RingGeometry(1.3, 1.55, 36), M.hoverRing));
+    R.hoverRing.rotation.x = -Math.PI / 2;
+    R.hoverRing.visible = false;
+
+    // passarela livre no chão entre os blocos (z=4..14 livre para personagens)
+    var pathMat = std(0x1b1e24, { roughness: .85 });
+    box(86, .04, 6.2, pathMat, -12, .02, 9, null, true);
+
+    // bancos no pátio (fora da faixa z=4..14)
+    var wood = std(0x4b3626, { roughness: .8 });
+    [[-40, 16], [-27, 16], [-33.5, -9.5]].forEach(function (b) {
+      var g = add(new THREE.Group());
+      box(3.4, .14, .9, wood, 0, .55, 0, g);
+      box(.2, .55, .7, M.body, -1.3, 0, 0, g);
+      box(.2, .55, .7, M.body, 1.3, 0, 0, g);
+      g.position.set(b[0], 0, b[1]);
+    });
+
+    // postes de luz do pátio (acendem mais forte na falta de energia como emergência)
+    M.lamp = glow(0xffe6b3, .45);
+    R.lamps = [];
+    [[-46, 15.8], [-21, 15.8], [-33.5, -11.5]].forEach(function (p) {
+      var pole = add(new THREE.Mesh(new THREE.CylinderGeometry(.09, .12, 4.8, 8), M.body));
+      pole.position.set(p[0], 2.4, p[1]); pole.castShadow = true;
+      var head = add(new THREE.Mesh(new THREE.SphereGeometry(.26, 12, 12), M.lamp));
+      head.position.set(p[0], 4.95, p[1]);
+      R.lamps.push(head);
+    });
+
+    // mastro com bandeira tremulando (x=-50, z=16)
+    var flagPole = add(new THREE.Mesh(new THREE.CylinderGeometry(.07, .1, 8.5, 8), std(0xdadbdf, { metalness: .6, roughness: .35 })));
+    flagPole.position.set(-50, 4.25, 16); flagPole.castShadow = true;
+    var flagSegs = [], flagMat = std(C.fiber, { roughness: .6, side: THREE.DoubleSide });
+    for (var fs = 0; fs < 4; fs++) {
+      var seg = add(new THREE.Mesh(new THREE.BoxGeometry(.48, 1.1, .05), flagMat));
+      seg.position.set(-49.7 + fs * .46, 7.8, 16);
+      flagSegs.push(seg);
+    }
+    updaters.push(function (dt, t) {
+      if (reduceMotion) return;
+      var amp = .16 + S.rain * .22;
+      for (var i = 0; i < flagSegs.length; i++) {
+        flagSegs[i].position.z = 16 + Math.sin(t * (4.5 + S.rain * 3) - i * .8) * amp * (i + 1) * .35;
+        flagSegs[i].rotation.y = Math.cos(t * 4.5 - i * .8) * amp * .6;
+      }
+    });
+
+    // bicicletário (x=-16, z=16.5)
+    var bikeMat = std(0x8892a0, { metalness: .5, roughness: .4 });
+    box(3.8, .08, 1.2, std(0x1f2329), -16, .02, 16.5, null, true);
+    [-17.2, -16, -14.8].forEach(function (bx, bi) {
+      var bg = add(new THREE.Group()); bg.position.set(bx, .45, 16.5);
+      var w1 = add(new THREE.Mesh(new THREE.TorusGeometry(.36, .04, 6, 16), bikeMat), bg); w1.position.z = -.38; w1.rotation.y = Math.PI / 2;
+      var w2 = add(new THREE.Mesh(new THREE.TorusGeometry(.36, .04, 6, 16), bikeMat), bg); w2.position.z = .38; w2.rotation.y = Math.PI / 2;
+      box(.06, .06, .8, std([C.fiber, C.copper, C.wifi][bi]), 0, .2, 0, bg);
+    });
+
+    // quadra esportiva com traves e bola animada (x=-33.5, z=24)
+    var court = add(new THREE.Group()); court.position.set(-33.5, .02, 24);
+    box(18, .04, 10, std(0x17202b, { roughness: .9 }), 0, 0, 0, court, true);
+    var lineM = basic(0xffffff, { transparent: true, opacity: .35 });
+    line([V(-8.8, .05, -4.8), V(8.8, .05, -4.8), V(8.8, .05, 4.8), V(-8.8, .05, 4.8), V(-8.8, .05, -4.8)], lineM, court);
+    line([V(0, .05, -4.8), V(0, .05, 4.8)], lineM, court);
+    [-8.9, 8.9].forEach(function (gx) {
+      box(.1, 1.6, .1, M.body, gx, 0, -1.4, court);
+      box(.1, 1.6, .1, M.body, gx, 0, 1.4, court);
+      box(.1, .1, 2.9, M.body, gx, 1.55, 0, court);
+    });
+    var ball = add(new THREE.Mesh(new THREE.IcosahedronGeometry(.32, 1), std(0xffffff, { roughness: .4 })), court);
+    ball.castShadow = true;
+    updaters.push(function (dt, t) {
+      if (reduceMotion) { ball.position.set(0, .32, 0); return; }
+      ball.position.x = Math.sin(t * .85) * 5.8;
+      ball.position.z = Math.cos(t * 1.15) * 2.6;
+      ball.position.y = .32 + Math.abs(Math.sin(t * 3.2)) * .75;
+      ball.rotation.x = t * 2.5; ball.rotation.z = t * 1.8;
+    });
+
+    // escultura cinética no norte do pátio (x=-33.5, z=-14)
+    var sculp = add(new THREE.Group()); sculp.position.set(-33.5, 0, -14);
+    box(2.4, .35, 2.4, std(0x1f2329), 0, 0, 0, sculp);
+    var gyro1 = add(new THREE.Mesh(new THREE.TorusGeometry(1.1, .06, 10, 32), glow(C.fiber, 1.1)), sculp);
+    gyro1.position.y = 2.1;
+    var gyro2 = add(new THREE.Mesh(new THREE.TorusGeometry(.78, .05, 10, 32), glow(C.copper, 1.2)), sculp);
+    gyro2.position.y = 2.1;
+    var gyroCore = add(new THREE.Mesh(new THREE.OctahedronGeometry(.36, 0), glow(0xffffff, 1.6)), sculp);
+    gyroCore.position.y = 2.1;
+    var sculpBoost = 0;
+    updaters.push(function (dt, t) {
+      if (sculpBoost > 0) sculpBoost = Math.max(0, sculpBoost - dt * 1.6);
+      var sp = 1 + sculpBoost * 5;
+      gyro1.rotation.y = t * .6 * sp; gyro1.rotation.x = Math.sin(t * .5) * .4;
+      gyro2.rotation.x = t * .9 * sp; gyro2.rotation.z = t * .4 * sp;
+      gyroCore.rotation.y = -t * 1.2 * sp;
+      gyroCore.position.y = 2.1 + (reduceMotion ? 0 : Math.sin(t * 2) * .15);
+    });
+    var sculpHit = add(new THREE.Mesh(new THREE.SphereGeometry(1.6, 10, 10), basic(0xffffff, { visible: false })));
+    sculpHit.position.set(-33.5, 2.1, -14);
+    registerInteractive(sculpHit, {
+      pos: V(-33.5, .2, -14), color: C.fiber,
+      onClick: function () { sculpBoost = 1; spawnPing(V(-33.5, .25, -14), C.fiber, 6); }
+    });
+
+    // pássaros / borboletas sobre o pátio
+    var flyers = [];
+    for (var fi = 0; fi < 6; fi++) {
+      var fg = add(new THREE.Group());
+      var wMat = basic(fi < 3 ? 0xdadbdf : [C.fiber, C.wifi, C.g4][fi - 3], { side: THREE.DoubleSide });
+      var wl = add(new THREE.Mesh(new THREE.PlaneGeometry(.38, .2), wMat), fg); wl.position.x = -.19;
+      var wr = add(new THREE.Mesh(new THREE.PlaneGeometry(.38, .2), wMat), fg); wr.position.x = .19;
+      flyers.push({ g: fg, wl: wl, wr: wr, cx: -35 + fi * 9, cy: fi < 3 ? 18 + fi * 2 : 5.5 + (fi % 2), cz: fi < 3 ? -8 : 2, ph: fi * 1.3, rad: fi < 3 ? 14 : 5 });
+    }
+    updaters.push(function (dt, t) {
+      var hide = S.rain > .3 || reduceMotion;
+      for (var i = 0; i < flyers.length; i++) {
+        var fl = flyers[i]; fl.g.visible = !hide;
+        if (hide) continue;
+        var a = t * .55 + fl.ph;
+        var nx = fl.cx + Math.cos(a) * fl.rad, nz = fl.cz + Math.sin(a * 2) * fl.rad * .5;
+        fl.g.position.set(nx, fl.cy + Math.sin(t * 2.2 + fl.ph) * .7, nz);
+        fl.g.rotation.y = -a;
+        var flap = Math.sin(t * 14 + fl.ph) * .75;
+        fl.wl.rotation.z = flap; fl.wr.rotation.z = -flap;
+      }
+    });
+
+    // caixas de passagem da fibra no pátio
+    [-44, -34, -24].forEach(function (x, i) {
+      var z = i === 0 ? -3.6 : (i === 1 ? -5.6 : -4.6);
+      box(.9, .18, .9, std(0x252930), x, .02, z, null, true);
+      box(.25, .04, .25, M.fiber, x, .2, z, null, true);
+    });
+
+    // nuvens estilizadas no céu
+    var clouds = [];
+    M.cloud = std(0x282d38, { transparent: true, opacity: .35, roughness: 1, flatShading: true });
+    for (var ci = 0; ci < 7; ci++) {
+      var cg = add(new THREE.Group());
+      var cx = -120 + ci * 38, cy = 62 + (ci % 3) * 6, cz = -55 + (ci % 2) * 32;
+      for (var cj = 0; cj < 3; cj++) {
+        var puff = add(new THREE.Mesh(new THREE.IcosahedronGeometry(5.5 - cj * 1.1, 1), M.cloud), cg);
+        puff.position.set((cj - 1) * 4.5, (cj % 2) * 1.2, 0);
+        puff.scale.set(1.4, .55, 1);
+      }
+      cg.position.set(cx, cy, cz);
+      clouds.push({ g: cg, sp: 1.2 + (ci % 3) * .5 });
+    }
+    updaters.push(function (dt) {
+      if (reduceMotion) return;
+      for (var i = 0; i < clouds.length; i++) {
+        clouds[i].g.position.x += dt * clouds[i].sp * (1 + S.rain * 1.8);
+        if (clouds[i].g.position.x > 130) clouds[i].g.position.x = -130;
+      }
+      M.cloud.opacity = .28 + S.rain * .35;
+    });
+
+    // alvos clicáveis dos equipamentos principais
+    var targets = [
+      { p: V(-67, 11, -5), r: 2.8, color: C.g4, ch: 6 },      // Torre / Mastro 4G
+      { p: V(-56.1, 1.4, -4.5), r: 1.8, color: C.ok, ch: 7 }, // Nobreak
+      { p: R.net, r: 6.5, color: C.copper, ch: 5 },           // Globo Internet
+      { p: V(-34, .8, -5.6), r: 3.2, color: C.fiber, ch: 2 }, // Fibra no pátio
+      { p: R.pc05, r: 1.6, color: C.copper, ch: 5 }           // PC 05
+    ];
+    targets.forEach(function (tg) {
+      var hit = add(new THREE.Mesh(new THREE.SphereGeometry(tg.r, 10, 10), basic(0xffffff, { visible: false })));
+      hit.position.copy(tg.p);
+      registerInteractive(hit, {
+        pos: V(tg.p.x, Math.max(.2, tg.p.y - .8), tg.p.z),
+        color: tg.color,
+        onClick: function () {
+          spawnPing(V(tg.p.x, .25, tg.p.z), tg.color, 5.5);
+          if (tg.ch !== ch) setChapter(tg.ch);
+        }
+      });
+    });
+
+    // atualizador de pings, iluminação climática e postes que acendem na falta de energia
+    updaters.push(function (dt) {
+      for (var i = pings.length - 1; i >= 0; i--) {
+        var pg = pings[i];
+        pg.k = Math.min(1, pg.k + dt * 1.6);
+        var e = ease(pg.k);
+        pg.m.scale.setScalar(1 + e * pg.max);
+        pg.mat.opacity = (1 - e) * .85;
+        if (pg.k >= 1) {
+          scene.remove(pg.m);
+          pg.m.geometry.dispose();
+          pg.mat.dispose();
+          pings.splice(i, 1);
+        }
+      }
+      M.lamp.emissiveIntensity = .45 + (1 - S.power) * 2.8;
+      if (R.sun) R.sun.intensity = .75 - S.rain * .28;
+      if (scene.fog) scene.fog.density = .0062 + S.rain * .0038;
+    });
+  }
+
   function makeBolt() {
     if (R.boltLine) { scene.remove(R.boltLine); R.boltLine.geometry.dispose(); }
     var x = -30 + (Math.random() - .5) * 8, z = 6 + (Math.random() - .5) * 6, pts = [], y = 70;
@@ -778,6 +996,7 @@
 
     /* ---- render ---- */
     if (composer) composer.render(); else renderer.render(scene, camera);
+    if (EXT) for (var q = 0; q < EXT.post.length; q++) EXT.post[q](dt, time);
 
     /* ---- rótulos (interpolação suave + profundidade) ---- */
     var v = new THREE.Vector3(), lk = Math.min(1, dt * 16);
@@ -808,6 +1027,7 @@
     wantPos = V(c.cam[0], c.cam[1], c.cam[2]); wantTg = V(c.tg[0], c.tg[1], c.tg[2]);
     if (instant) { camPos = wantPos.clone(); camTg = wantTg.clone(); camVel = V(0, 0, 0); tgVel = V(0, 0, 0); }
     setTargets(); if (instant) for (var k in T) S[k] = T[k];
+    if (EXT) EXT.onChapter.forEach(function (f) { f(ch, instant); });
     if (ch === 2) S.bolt = -1.2;
     R.pkLastStep = -1;
     baseBloom = (ch === 1 || ch === 5 || ch === 6 || ch === 10) ? .64 : .52;
@@ -859,6 +1079,14 @@
     }
     buildLabels();
 
+    /* ---- gancho de extensões (people3d.js etc.) ---- */
+    EXT = { THREE: THREE, scene: scene, camera: camera, canvas: canvas, host: host, W: W, H: H, C: C, R: R, S: S, M: M,
+      V: V, std: std, glow: glow, basic: basic, add: add, box: box, lerp: lerp, ease: ease, updaters: updaters,
+      spawnPing: spawnPing, reduceMotion: reduceMotion, chapters: CH, onChapter: [], post: [],
+      getCh: function () { return ch; }, getChT: function () { return chT; }, isDragging: function () { return dragging; } };
+    window.DEMO3D.api = EXT;
+    (window.DEMO3D_EXT || []).forEach(function (f) { try { f(EXT); } catch (e) { console.error('DEMO3D_EXT', e); } });
+
     // lista de etapas da Parte 7
     stepsEl = host.querySelector('.d3-steps');
     stepsEl.innerHTML = R.pkSteps.map(function (s, i) { return '<li><b>' + String(i + 1).padStart(2, '0') + '</b>' + s.n + '</li>'; }).join('');
@@ -869,22 +1097,57 @@
     dots.innerHTML = CH.map(function (c, i) { return '<button title="' + (c.t || c.ey) + '">' + String(i + 1).padStart(2, '0') + '</button>'; }).join('');
     [].forEach.call(dots.querySelectorAll('button'), function (b, i) { b.addEventListener('click', function (e) { e.stopPropagation(); setChapter(i); }); });
 
-    // arrastar para girar + micro-parallax no hover
-    var lx = 0, ly = 0;
-    canvas.addEventListener('pointerdown', function (e) { dragging = true; yawVel = 0; pitchVel = 0; lx = e.clientX; ly = e.clientY; canvas.setPointerCapture(e.pointerId); });
+    // arrastar para girar + micro-parallax + raycast de hover/clique
+    var lx = 0, ly = 0, downX = 0, downY = 0;
+    var ray = new THREE.Raycaster(), ptr = new THREE.Vector2(), hoveredObj = null;
+    function pickInteractive(clientX, clientY) {
+      var rect = canvas.getBoundingClientRect();
+      ptr.x = ((clientX - rect.left) / Math.max(1, rect.width)) * 2 - 1;
+      ptr.y = -((clientY - rect.top) / Math.max(1, rect.height)) * 2 + 1;
+      ray.setFromCamera(ptr, camera);
+      var hits = ray.intersectObjects(interactables, false);
+      return hits.length ? hits[0].object : null;
+    }
+    canvas.addEventListener('pointerdown', function (e) {
+      dragging = true; yawVel = 0; pitchVel = 0;
+      lx = downX = e.clientX; ly = downY = e.clientY;
+      canvas.setPointerCapture(e.pointerId);
+    });
     canvas.addEventListener('pointermove', function (e) {
       var rect = canvas.getBoundingClientRect();
       hoverTX = ((e.clientX - rect.left) / Math.max(1, rect.width) - .5) * 2;
       hoverTY = ((e.clientY - rect.top) / Math.max(1, rect.height) - .5) * 2;
-      if (!dragging) return;
+      if (!dragging) {
+        hoveredObj = pickInteractive(e.clientX, e.clientY);
+        if (hoveredObj && hoveredObj.userData.interactive) {
+          var info = hoveredObj.userData.interactive;
+          R.hoverRing.visible = true;
+          R.hoverRing.position.set(info.pos.x, Math.max(.14, info.pos.y), info.pos.z);
+          M.hoverRing.color.setHex(info.color);
+          M.hoverRing.opacity = .75;
+          canvas.style.cursor = 'pointer';
+        } else {
+          R.hoverRing.visible = false;
+          canvas.style.cursor = '';
+        }
+        return;
+      }
       var dy = -(e.clientX - lx) * .005, dp = (e.clientY - ly) * .003;
       yawUser += dy; pitchUser += dp;
       yawVel = dy * .45; pitchVel = dp * .45;
       lx = e.clientX; ly = e.clientY;
       yawUser = Math.max(-1.6, Math.min(1.6, yawUser)); pitchUser = Math.max(-.5, Math.min(.5, pitchUser));
     });
-    canvas.addEventListener('pointerleave', function () { hoverTX = 0; hoverTY = 0; });
-    canvas.addEventListener('pointerup', function () { dragging = false; });
+    canvas.addEventListener('pointerleave', function () { hoverTX = 0; hoverTY = 0; R.hoverRing.visible = false; canvas.style.cursor = ''; });
+    canvas.addEventListener('pointerup', function (e) {
+      dragging = false;
+      if (Math.hypot(e.clientX - downX, e.clientY - downY) < 6) {
+        var hit = pickInteractive(e.clientX, e.clientY);
+        if (hit && hit.userData.interactive && hit.userData.interactive.onClick) {
+          hit.userData.interactive.onClick();
+        }
+      }
+    });
     addEventListener('resize', fitDPR);
 
     clock = new THREE.Clock();
